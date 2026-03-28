@@ -292,7 +292,7 @@
   <!-- ===================== SECTION 4: DROP ZONES ===================== -->
   <div class="section">
     <div class="section-title">Step 4 — Upload Case, Student Paper & LLM Log</div>
-    <div class="section-hint">Drag and drop PDF files onto each zone, or paste text directly. The LLM log is optional.</div>
+    <div class="section-hint">Drop PDF, Word (.docx), or .txt files onto each zone — or paste text directly. LLM log is optional.</div>
 
     <!-- Case PDF -->
     <div style="margin-bottom:20px;">
@@ -301,8 +301,11 @@
         ondragleave="handleDragLeave('caseZone')"
         ondrop="handleDrop(event,'caseFile','caseZone','caseStatus','caseText')">
         <div class="dropzone-icon">📄</div>
-        <div class="dropzone-label">Case Study PDF</div>
-        <div class="dropzone-hint">PDF, Word (.docx), or .txt — drag & drop or click</div> style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
+        <div class="dropzone-label">Case Study</div>
+        <div class="dropzone-hint">PDF, Word (.docx), or .txt — drag & drop or click</div>
+        <div class="dropzone-status" id="caseStatus"></div>
+      </div>
+      <input type="file" id="caseFile" accept=".pdf,.txt,.docx,.doc" style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
       <div class="paste-area">
         <textarea id="caseText" rows="3" placeholder="Or paste case study text here…"></textarea>
       </div>
