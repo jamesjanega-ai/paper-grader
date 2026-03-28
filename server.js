@@ -1,7 +1,5 @@
 // ============================================================
 // server.js — Innovation Paper Grader Backend v2
-// New: harshness slider, session settings (Year/Section/Case/Team),
-// narrative summary, per-question %, updated Google Sheets columns
 // ============================================================
 
 const express = require('express');
@@ -10,13 +8,14 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(express.static('public')); // ← Serves grader app from /public/index.html
 
 
 // ============================================================
 // HEALTH CHECK — Render uses this to confirm the app is alive
 // Also used by the front end to "wake up" the server before grading
 // ============================================================
-app.get('/', (req, res) => {
+app.get('/health', (req, res) => {
   res.send('Innovation Paper Grader v2 is running.');
 });
 
@@ -231,7 +230,6 @@ async function saveToSheets(gradingResult, originalRequest) {
       return;
     }
 
-    // Build Q1-Q10 percentage array (fill unused slots with empty string)
     const qPcts = Array(10).fill('');
     if (gradingResult.questions) {
       gradingResult.questions.forEach((q, i) => {
@@ -242,17 +240,17 @@ async function saveToSheets(gradingResult, originalRequest) {
     const oneSentence = gradingResult.narrativeSummary?.oneSentenceSummary || '';
 
     const payload = {
-      timestamp:      new Date().toISOString(),
-      year:           originalRequest.year || '',
-      section:        originalRequest.section || '',
-      caseName:       originalRequest.caseName || '',
-      team:           originalRequest.team || '',
-      q1:  qPcts[0], q2:  qPcts[1], q3:  qPcts[2], q4:  qPcts[3], q5:  qPcts[4],
-      q6:  qPcts[5], q7:  qPcts[6], q8:  qPcts[7], q9:  qPcts[8], q10: qPcts[9],
-      finalPct:       gradingResult.percentage ? gradingResult.percentage + '%' : '',
-      pointsEarned:   gradingResult.finalPoints || '',
-      pointsPossible: originalRequest.pointsPossible || '',
-      summary:        oneSentence
+      timestamp:        new Date().toISOString(),
+      year:             originalRequest.year || '',
+      section:          originalRequest.section || '',
+      caseName:         originalRequest.caseName || '',
+      team:             originalRequest.team || '',
+      q1:  qPcts[0],   q2:  qPcts[1],  q3:  qPcts[2],  q4:  qPcts[3],  q5:  qPcts[4],
+      q6:  qPcts[5],   q7:  qPcts[6],  q8:  qPcts[7],  q9:  qPcts[8],  q10: qPcts[9],
+      finalPct:         gradingResult.percentage ? gradingResult.percentage + '%' : '',
+      pointsEarned:     gradingResult.finalPoints || '',
+      pointsPossible:   originalRequest.pointsPossible || '',
+      summary:          oneSentence
     };
 
     const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
