@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Innovation Paper Grader</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; color: #222; }
@@ -174,6 +175,16 @@
   .watchfor-box { background: #fff8f0; border: 2px solid #e67e22; border-radius: 8px; padding: 16px 20px; margin-bottom: 14px; }
   .watchfor-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #e67e22; margin-bottom: 6px; }
   .one-sentence-box { background: #f5f5f5; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #555; font-style: italic; border-left: 3px solid #bbb; }
+
+  /* BLIND GRADE */
+  .blind-grade-row { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: #fff8f0; border: 1px solid #e67e22; border-radius: 8px; cursor: pointer; }
+  .blind-grade-row input[type=checkbox] { width: 18px; height: 18px; accent-color: #e67e22; flex-shrink: 0; margin-top: 2px; }
+  .blind-blind-label { font-size: 13px; color: #555; line-height: 1.5; }
+  .blind-blind-label strong { color: #e67e22; }
+  .blind-active-badge { display: none; font-size: 12px; font-weight: 700; color: #e67e22; background: #fff8f0; border: 1px solid #e67e22; border-radius: 6px; padding: 3px 10px; margin-left: 10px; vertical-align: middle; }
+
+  /* EVIDENCE QUOTE */
+  .evidence-quote { font-size: 11px; color: #888; font-style: italic; margin-top: 4px; padding: 4px 8px; background: #fafafa; border-left: 2px solid #ddd; border-radius: 2px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -207,8 +218,12 @@
         <input type="text" id="settingCase" placeholder="e.g. Brandless CPG Strategy" oninput="saveSettings()" />
       </div>
       <div class="settings-field">
-        <label for="settingTeam">Team Name / Number</label>
+        <label for="settingTeam">Team Name / Number <span class="blind-active-badge" id="blindBadge">🙈 BLIND</span></label>
         <input type="text" id="settingTeam" placeholder="e.g. Team 4" oninput="saveSettings()" />
+      </div>
+      <div class="blind-grade-row" onclick="toggleBlindGrade()">
+        <input type="checkbox" id="blindGrade" onclick="event.stopPropagation()" onchange="toggleBlindGrade()" />
+        <span class="blind-blind-label"><strong>🙈 Blind Grade Mode</strong> — hides Team Name from your view while grading to prevent bias. The team name is still saved to your Google Sheet. Turn on before uploading the paper.</span>
       </div>
     </div>
     <div class="settings-saved" id="settingsSaved"></div>
@@ -261,7 +276,7 @@
   <div class="section">
     <div class="section-title">Step 2 — Enter This Week's Questions</div>
     <div class="section-hint">Paste the case questions below, one per line or numbered. Then click "Build Rubric" to generate a factor checklist for each question.</div>
-    <textarea id="questionsInput" rows="6" placeholder="1. What are the key strategic issues facing the company?&#10;2. Apply a relevant innovation framework to analyze the case.&#10;3. What recommendations would you make?"></textarea>
+    <textarea id="questionsInput" rows="6" oninput="saveQuestionsState()" placeholder="1. What are the key strategic issues facing the company?&#10;2. Apply a relevant innovation framework to analyze the case.&#10;3. What recommendations would you make?"></textarea>
     <div style="margin-top:12px;">
       <button class="btn btn-primary" onclick="buildRubric()">Build Rubric →</button>
     </div>
@@ -287,10 +302,7 @@
         ondrop="handleDrop(event,'caseFile','caseZone','caseStatus','caseText')">
         <div class="dropzone-icon">📄</div>
         <div class="dropzone-label">Case Study PDF</div>
-        <div class="dropzone-hint">Drag & drop or click to upload</div>
-        <div class="dropzone-status" id="caseStatus"></div>
-      </div>
-      <input type="file" id="caseFile" accept=".pdf" style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
+        <div class="dropzone-hint">PDF, Word (.docx), or .txt — drag & drop or click</div> style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
       <div class="paste-area">
         <textarea id="caseText" rows="3" placeholder="Or paste case study text here…"></textarea>
       </div>
@@ -304,10 +316,10 @@
         ondrop="handleDrop(event,'paperFile','paperZone','paperStatus','studentPaperText')">
         <div class="dropzone-icon">📝</div>
         <div class="dropzone-label">Student Group Paper</div>
-        <div class="dropzone-hint">Drag & drop or click to upload</div>
+        <div class="dropzone-hint">PDF, Word (.docx), or .txt — drag & drop or click</div>
         <div class="dropzone-status" id="paperStatus"></div>
       </div>
-      <input type="file" id="paperFile" accept=".pdf" style="display:none" onchange="handleFileSelect(event,'paperZone','paperStatus','studentPaperText')"/>
+      <input type="file" id="paperFile" accept=".pdf,.txt,.docx,.doc" style="display:none" onchange="handleFileSelect(event,'paperZone','paperStatus','studentPaperText')"/>
       <div class="paste-area">
         <textarea id="studentPaperText" rows="3" placeholder="Or paste student paper text here…"></textarea>
       </div>
@@ -321,10 +333,10 @@
         ondrop="handleDrop(event,'llmFile','llmZone','llmStatus','llmInteractions')">
         <div class="dropzone-icon">🤖</div>
         <div class="dropzone-label">Student LLM Interaction Log (Optional)</div>
-        <div class="dropzone-hint">Drag & drop PDF or paste the conversation text below</div>
+        <div class="dropzone-hint">PDF, Word (.docx), or .txt — drag & drop, click, or paste below</div>
         <div class="dropzone-status" id="llmStatus"></div>
       </div>
-      <input type="file" id="llmFile" accept=".pdf" style="display:none" onchange="handleFileSelect(event,'llmZone','llmStatus','llmInteractions')"/>
+      <input type="file" id="llmFile" accept=".pdf,.txt,.docx,.doc" style="display:none" onchange="handleFileSelect(event,'llmZone','llmStatus','llmInteractions')"/>
       <div class="paste-area">
         <textarea id="llmInteractions" rows="3" placeholder="Or paste LLM conversation log here (optional)…"></textarea>
       </div>
@@ -708,47 +720,150 @@ let rubricSelections = {}; // { questionIndex: Set of factor names }
 // STEP 0: SETTINGS — localStorage persistence
 // ============================================================
 function saveSettings() {
-  localStorage.setItem('pg_year', document.getElementById('settingYear').value);
-  localStorage.setItem('pg_section', document.getElementById('settingSection').value);
-  localStorage.setItem('pg_case', document.getElementById('settingCase').value);
-  localStorage.setItem('pg_team', document.getElementById('settingTeam').value);
+  localStorage.setItem('pg_year',       document.getElementById('settingYear').value);
+  localStorage.setItem('pg_section',    document.getElementById('settingSection').value);
+  localStorage.setItem('pg_case',       document.getElementById('settingCase').value);
+  localStorage.setItem('pg_team',       document.getElementById('settingTeam').value);
+  localStorage.setItem('pg_blindGrade', document.getElementById('blindGrade').checked ? '1' : '0');
   const saved = document.getElementById('settingsSaved');
   saved.textContent = '✅ Settings saved';
   setTimeout(() => { saved.textContent = ''; }, 2000);
 }
 
 function loadSettings() {
-  const year = localStorage.getItem('pg_year');
-  const section = localStorage.getItem('pg_section');
-  const caseVal = localStorage.getItem('pg_case');
-  const team = localStorage.getItem('pg_team');
-  if (year) document.getElementById('settingYear').value = year;
-  if (section) document.getElementById('settingSection').value = section;
-  if (caseVal) document.getElementById('settingCase').value = caseVal;
-  if (team) document.getElementById('settingTeam').value = team;
+  const year  = localStorage.getItem('pg_year');
+  const sec   = localStorage.getItem('pg_section');
+  const cas   = localStorage.getItem('pg_case');
+  const team  = localStorage.getItem('pg_team');
+  const blind = localStorage.getItem('pg_blindGrade');
+  if (year)  document.getElementById('settingYear').value    = year;
+  if (sec)   document.getElementById('settingSection').value = sec;
+  if (cas)   document.getElementById('settingCase').value    = cas;
+  if (team)  document.getElementById('settingTeam').value    = team;
+  if (blind === '1') {
+    document.getElementById('blindGrade').checked = true;
+    applyBlindGrade(true);
+  }
 }
 
-// Load saved settings when page opens
-window.addEventListener('DOMContentLoaded', loadSettings);
+function toggleBlindGrade() {
+  const cb = document.getElementById('blindGrade');
+  // If called from the row div, toggle the checkbox
+  if (event && event.target !== cb) cb.checked = !cb.checked;
+  applyBlindGrade(cb.checked);
+  saveSettings();
+}
+
+function applyBlindGrade(on) {
+  const teamInput = document.getElementById('settingTeam');
+  const badge     = document.getElementById('blindBadge');
+  teamInput.style.webkitTextSecurity = on ? 'disc' : 'none';
+  teamInput.style.textSecurity       = on ? 'disc' : 'none';
+  teamInput.style.color              = on ? 'transparent' : '';
+  teamInput.style.textShadow         = on ? '0 0 8px rgba(0,0,0,0.5)' : 'none';
+  badge.style.display                = on ? 'inline' : 'none';
+}
+
+// ============================================================
+// CHIP STATE persistence
+// ============================================================
+function saveChipsState() {
+  localStorage.setItem('pg_chips',    JSON.stringify(Array.from(selectedChips)));
+  localStorage.setItem('pg_priority', priorityChip || '');
+}
+
+function loadChipsState() {
+  const chips    = JSON.parse(localStorage.getItem('pg_chips') || '[]');
+  const priority = localStorage.getItem('pg_priority') || '';
+  chips.forEach(key => {
+    const el = document.querySelector(`.chip[data-chip="${key}"]`);
+    if (el) { selectedChips.add(key); el.classList.add('selected'); }
+  });
+  if (priority && selectedChips.has(priority)) priorityChip = priority;
+  renderPriorityRow();
+}
+
+// ============================================================
+// QUESTIONS + RUBRIC persistence
+// ============================================================
+function saveQuestionsState() {
+  localStorage.setItem('pg_questions', document.getElementById('questionsInput').value);
+}
+
+function saveRubricState() {
+  const plain = {};
+  Object.keys(rubricSelections).forEach(i => {
+    plain[i] = Array.from(rubricSelections[i]);
+  });
+  localStorage.setItem('pg_rubricData', JSON.stringify({
+    questions:  parsedQuestions,
+    selections: plain
+  }));
+}
+
+function loadRubricState() {
+  const raw = localStorage.getItem('pg_rubricData');
+  if (!raw) return;
+  let saved;
+  try { saved = JSON.parse(raw); } catch(e) { return; }
+  if (!saved || !saved.questions || !saved.questions.length) return;
+
+  // Restore question text
+  document.getElementById('questionsInput').value = saved.questions.join('\n');
+
+  // Build rubric (applies defaults)
+  buildRubric(true); // pass true = silent (no scroll)
+
+  // Override checkbox states with saved selections
+  Object.keys(saved.selections).forEach(i => {
+    const savedSet = new Set(saved.selections[i]);
+    rubricSelections[i] = savedSet;
+    document.querySelectorAll(`input[data-q="${i}"]`).forEach(cb => {
+      cb.checked = savedSet.has(cb.dataset.factor);
+    });
+    // Fix Check All / Uncheck All button label
+    const allChecked = Array.from(document.querySelectorAll(`input[data-q="${i}"]`)).every(c => c.checked);
+    const btn = document.querySelector(`#factors_${i}`)?.closest('.question-block')?.querySelector('.btn-check-all');
+    if (btn) btn.textContent = allChecked ? 'Uncheck All' : 'Check All';
+  });
+}
+
+// ============================================================
+// SLIDER persistence
+// ============================================================
+function loadSliderState() {
+  const saved = localStorage.getItem('pg_harshness');
+  if (saved) document.getElementById('harshnessSlider').value = saved;
+  updateSlider();
+}
+
+// ============================================================
+// FULL INITIALIZATION — runs once when page loads
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  loadSettings();    // Step 0: year/section/case/team/blind
+  loadChipsState();  // Step 1: chips + priority
+  loadSliderState(); // Harshness slider
+  loadRubricState(); // Step 2+3: questions + rubric selections
+});
 
 // ============================================================
 // HARSHNESS SLIDER
 // ============================================================
 function computeAdjustedScores(harshness) {
-  // harshness: 75 (lenient) → 100 (harsh)
-  // leniency: 1.0 (at 75%) → 0.0 (at 100%)
   const leniency = (100 - harshness) / 25;
   return {
     absent:     0,
-    incomplete: parseFloat((0.25 + leniency * 0.15).toFixed(2)),  // 0.25 → 0.40
-    partial:    parseFloat((0.50 + leniency * 0.15).toFixed(2)),  // 0.50 → 0.65
-    strong:     parseFloat((0.75 + leniency * 0.13).toFixed(2)),  // 0.75 → 0.88
+    incomplete: parseFloat((0.25 + leniency * 0.15).toFixed(2)),
+    partial:    parseFloat((0.50 + leniency * 0.15).toFixed(2)),
+    strong:     parseFloat((0.75 + leniency * 0.13).toFixed(2)),
     mastery:    1.0
   };
 }
 
 function updateSlider() {
   const val = parseInt(document.getElementById('harshnessSlider').value);
+  localStorage.setItem('pg_harshness', val); // persist
   document.getElementById('sliderVal').textContent = val + '%';
   const s = computeAdjustedScores(val);
   document.getElementById('pill0').textContent = `Absent = ${s.absent}`;
@@ -757,13 +872,6 @@ function updateSlider() {
   document.getElementById('pill3').textContent = `Strong = ${s.strong}`;
   document.getElementById('pill4').textContent = `Mastery = ${s.mastery}`;
 }
-
-// Initialize slider display on load
-window.addEventListener('DOMContentLoaded', updateSlider);
-
-// ============================================================
-// CHIP SELECTION
-// ============================================================
 document.querySelectorAll('.chip').forEach(chip => {
   chip.addEventListener('click', () => {
     const key = chip.dataset.chip;
@@ -776,6 +884,7 @@ document.querySelectorAll('.chip').forEach(chip => {
       chip.classList.add('selected');
     }
     renderPriorityRow();
+    saveChipsState(); // persist
   });
 });
 
@@ -794,6 +903,7 @@ function renderPriorityRow() {
     btn.onclick = () => {
       priorityChip = key;
       renderPriorityRow();
+      saveChipsState(); // persist
     };
     row.appendChild(btn);
   });
@@ -809,24 +919,19 @@ const FACTORS_OPT_IN = new Set([
   'Peer and Team Evaluation'
 ]);
 
-function buildRubric() {
+function buildRubric(silent = false) {
   const raw = document.getElementById('questionsInput').value.trim();
-  if (!raw) { alert('Please enter at least one question.'); return; }
+  if (!raw) { if (!silent) alert('Please enter at least one question.'); return; }
 
-  // Split on numbered lines
   parsedQuestions = raw
     .split(/\n/)
     .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
     .filter(l => l.length > 0);
 
   rubricSelections = {};
-
-  // Pre-select all non-opt-in factors for every question
   parsedQuestions.forEach((_, i) => {
     rubricSelections[i] = new Set(
-      RUBRIC_FACTORS
-        .filter(f => !FACTORS_OPT_IN.has(f.name))
-        .map(f => f.name)
+      RUBRIC_FACTORS.filter(f => !FACTORS_OPT_IN.has(f.name)).map(f => f.name)
     );
   });
 
@@ -846,7 +951,7 @@ function buildRubric() {
 
     const grid = document.getElementById(`factors_${i}`);
     RUBRIC_FACTORS.forEach(factor => {
-      const isChecked = !FACTORS_OPT_IN.has(factor.name); // checked unless opt-in
+      const isChecked = !FACTORS_OPT_IN.has(factor.name);
       const item = document.createElement('label');
       item.className = 'factor-item';
       item.innerHTML = `
@@ -859,12 +964,16 @@ function buildRubric() {
   });
 
   document.getElementById('rubricSection').style.display = 'block';
-  document.getElementById('rubricSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!silent) document.getElementById('rubricSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  saveQuestionsState();
+  saveRubricState();
 }
 
 function toggleFactor(qIndex, factorName, checked) {
   if (checked) rubricSelections[qIndex].add(factorName);
   else rubricSelections[qIndex].delete(factorName);
+  saveRubricState(); // persist
 }
 
 // Check All / Uncheck All toggle button per question
@@ -919,24 +1028,56 @@ async function handleFileSelect(event, zoneId, statusId, textAreaId) {
 }
 
 async function processFile(file, zoneId, statusId, textAreaId) {
-  const zone = document.getElementById(zoneId);
-  const status = document.getElementById(statusId);
+  const zone     = document.getElementById(zoneId);
+  const status   = document.getElementById(statusId);
   const textarea = document.getElementById(textAreaId);
+  const ext      = file.name.split('.').pop().toLowerCase();
 
-  status.textContent = 'Reading PDF…';
+  status.textContent = `Reading ${ext.toUpperCase()} file…`;
   zone.classList.add('dragover');
 
   try {
-    const text = await extractPdfText(file);
+    let text = '';
+
+    if (ext === 'pdf') {
+      text = await extractPdfText(file);
+    } else if (ext === 'txt') {
+      text = await extractTxtText(file);
+    } else if (ext === 'docx' || ext === 'doc') {
+      text = await extractDocxText(file);
+    } else {
+      throw new Error(`Unsupported file type ".${ext}". Use PDF, DOCX, or TXT.`);
+    }
+
     textarea.value = text;
     zone.classList.remove('dragover');
     zone.classList.add('loaded');
     status.textContent = `✅ ${file.name} loaded (${text.length.toLocaleString()} characters)`;
   } catch (err) {
     zone.classList.remove('dragover');
-    status.textContent = '❌ Could not read PDF. Try pasting text below instead.';
+    status.textContent = `❌ ${err.message}. Try pasting text below instead.`;
     console.error(err);
   }
+}
+
+// Plain text files — native browser FileReader
+async function extractTxtText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Could not read text file'));
+    reader.readAsText(file);
+  });
+}
+
+// Word documents — mammoth.js extracts raw text
+async function extractDocxText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  if (!result.value || result.value.trim().length === 0) {
+    throw new Error('Word file appears empty or could not be read');
+  }
+  return result.value;
 }
 
 // ============================================================
@@ -1003,23 +1144,22 @@ async function gradePaper() {
   document.getElementById('resultsSection').className = 'results-section';
   showSpinner('Waking up the grading server… (this takes up to 30 seconds on first use)');
 
+  // Blind grade: send real team to Sheets, but flag it so the prompt stays blind
+  const isBlind = document.getElementById('blindGrade').checked;
+
   try {
-    // Step 1: Wake up Render (free tier sleeps after inactivity)
-    // We ping the health check endpoint first and wait up to 35 seconds
     try {
-      await fetchWithTimeout(`${BACKEND_URL}/`, 35000);
+      await fetchWithTimeout(`${BACKEND_URL}/health`, 35000);
     } catch (wakeErr) {
-      // If ping fails or times out, we try grading anyway — server might still respond
       console.warn('Wake-up ping timed out, proceeding anyway:', wakeErr.message);
     }
 
     showSpinner('Server is awake. Claude is grading the paper… (30–60 seconds)');
 
-    // Step 2: Send the actual grading request (2 minute timeout — papers can be long)
     const response = await fetchWithTimeout(`${BACKEND_URL}/grade`, 120000, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, blindGrade: isBlind })
     });
 
     const data = await response.json();
@@ -1101,10 +1241,18 @@ function renderResults(result, pointsPossible) {
       const scoreLabel = f.score === 0 ? '0' : f.score === 0.25 ? '.25' : f.score === 0.5 ? '.50' : f.score === 0.75 ? '.75' : '1.0';
       const row = document.createElement('div');
       row.className = 'factor-result';
+      const evidenceHtml = f.evidence
+        ? `<div class="evidence-quote">📎 Evidence: "${f.evidence}"</div>`
+        : '';
       row.innerHTML = `
         <div class="fr-score ${scoreClass}">${scoreLabel}</div>
-        <div class="fr-name">${f.factorName}</div>
-        <div class="fr-just">${f.justification}</div>`;
+        <div style="flex:1;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div class="fr-name" style="flex:1;">${f.factorName}</div>
+            <div class="fr-just" style="flex:2;">${f.justification}</div>
+          </div>
+          ${evidenceHtml}
+        </div>`;
       block.appendChild(row);
     });
 
