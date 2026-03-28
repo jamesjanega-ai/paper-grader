@@ -8,12 +8,11 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static('public')); // ← Serves grader app from /public/index.html
+app.use(express.static('public')); // Serves grader app from /public/index.html
 
 
 // ============================================================
-// HEALTH CHECK — Render uses this to confirm the app is alive
-// Also used by the front end to "wake up" the server before grading
+// HEALTH CHECK
 // ============================================================
 app.get('/health', (req, res) => {
   res.send('Innovation Paper Grader v2 is running.');
@@ -26,20 +25,20 @@ app.get('/health', (req, res) => {
 app.post('/grade', async (req, res) => {
   try {
     const {
-      chipContexts,        // Array of { name, content }
-      priorityChipName,    // Name of the priority chip
-      questions,           // Array of question strings
-      rubricSelections,    // { 0: ['Factor A', ...], 1: [...] }
-      caseText,            // Case study text
-      studentPaperText,    // Student paper text
-      llmInteractions,     // Optional LLM interaction log
-      pointsPossible,      // Total assignment points
-      year,                // Academic year (from settings)
-      section,             // Course section (from settings)
-      caseName,            // Case name (from settings)
-      team,                // Team name/number (from settings)
-      harshness,           // Slider value 75-100
-      adjustedScores       // { absent, incomplete, partial, strong, mastery }
+      chipContexts,
+      priorityChipName,
+      questions,
+      rubricSelections,
+      caseText,
+      studentPaperText,
+      llmInteractions,
+      pointsPossible,
+      year,
+      section,
+      caseName,
+      team,
+      harshness,
+      adjustedScores
     } = req.body;
 
     const prompt = buildGradingPrompt(
@@ -48,7 +47,6 @@ app.post('/grade', async (req, res) => {
       harshness, adjustedScores
     );
 
-    // Call Claude API
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -110,14 +108,12 @@ function buildGradingPrompt(
 ) {
   const scores = adjustedScores || { absent: 0, incomplete: 0.25, partial: 0.50, strong: 0.75, mastery: 1.0 };
 
-  // Frameworks section
   let frameworkSection = '';
   chipContexts.forEach(chip => {
     const isPriority = chip.name === priorityChipName;
     frameworkSection += `\n\n=== ${isPriority ? 'PRIORITY FRAMEWORK (weight most heavily)' : 'Supporting Framework'}: ${chip.name} ===\n${chip.content}`;
   });
 
-  // Questions + rubric factors
   let questionsSection = '';
   questions.forEach((q, i) => {
     const factors = rubricSelections[i] || [];
@@ -125,7 +121,6 @@ function buildGradingPrompt(
     factors.forEach(f => { questionsSection += `  - ${f}\n`; });
   });
 
-  // Prompt coaching instruction
   const coachingInstruction = llmInteractions
     ? `\nAlso review the student LLM interaction log. Act as a Prompt Engineering Coach: identify (1) what they did well, (2) specific weaknesses in their prompting strategy, (3) concrete actionable improvements.`
     : '';
@@ -218,10 +213,13 @@ Return ONLY a single valid JSON object. No markdown. No explanation. No text bef
 
 
 // ============================================================
-// saveToSheets - via Google Apps Script Web App
+// saveToSheets — via Google Apps Script Web App
+//
 // Sheet columns:
-// A: Timestamp | B: Year | C: Section | D: Case | E: Team |
-// F-O: Q1%-Q10% | P: Final% | Q: Points Earned | R: Points Possible | S: Summary
+// A: Timestamp       B: Year            C: Section
+// D: Case            E: Team            F-O: Q1%–Q10%
+// P: Final%          Q: Points Earned   R: Points Possible
+// S: Summary         T: Prompt Coaching U: Harshness %
 // ============================================================
 async function saveToSheets(gradingResult, originalRequest) {
   try {
@@ -237,8 +235,6 @@ async function saveToSheets(gradingResult, originalRequest) {
       });
     }
 
-    const oneSentence = gradingResult.narrativeSummary?.oneSentenceSummary || '';
-
     const payload = {
       timestamp:        new Date().toISOString(),
       year:             originalRequest.year || '',
@@ -250,7 +246,9 @@ async function saveToSheets(gradingResult, originalRequest) {
       finalPct:         gradingResult.percentage ? gradingResult.percentage + '%' : '',
       pointsEarned:     gradingResult.finalPoints || '',
       pointsPossible:   originalRequest.pointsPossible || '',
-      summary:          oneSentence
+      summary:          gradingResult.narrativeSummary?.oneSentenceSummary || '',
+      promptCoaching:   gradingResult.promptCoaching || '',
+      harshness:        originalRequest.harshness ? originalRequest.harshness + '%' : ''
     };
 
     const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
