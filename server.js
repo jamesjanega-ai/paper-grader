@@ -1,55 +1,52 @@
 // ============================================================
-// server.js — Innovation Paper Grader Backend
-// Receives grading inputs from grader.html, calls Claude API,
-// and logs results to Google Sheets.
+// server.js — Innovation Paper Grader Backend v2
+// New: harshness slider, session settings (Year/Section/Case/Team),
+// narrative summary, per-question %, updated Google Sheets columns
 // ============================================================
 
 const express = require('express');
 const cors = require('cors');
-const { google } = require('googleapis');
-const { GoogleAuth } = require('google-auth-library');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); // Papers can be long
+app.use(express.json({ limit: '10mb' }));
 
 
 // ============================================================
 // HEALTH CHECK — Render uses this to confirm the app is alive
-// Visit your Render URL in a browser to test this
+// Also used by the front end to "wake up" the server before grading
 // ============================================================
 app.get('/', (req, res) => {
-  res.send('Innovation Paper Grader is running.');
+  res.send('Innovation Paper Grader v2 is running.');
 });
 
 
 // ============================================================
 // /grade — Main grading endpoint
-// Called by grader.html when professor clicks "Grade Paper"
 // ============================================================
 app.post('/grade', async (req, res) => {
   try {
     const {
-      chipContexts,       // Array of { name, content } — the selected GPT frameworks
-      priorityChipName,   // Name of the chip marked as most important
-      questions,          // Array of question strings
-      rubricSelections,   // Object: { 0: ['Factor A', 'Factor B'], 1: [...] }
-      caseText,           // Text extracted from the dropped case PDF
-      studentPaperText,   // Student paper text (PDF or pasted)
-      llmInteractions,    // Student LLM conversation log (optional)
-      pointsPossible      // Total assignment points entered by professor
+      chipContexts,        // Array of { name, content }
+      priorityChipName,    // Name of the priority chip
+      questions,           // Array of question strings
+      rubricSelections,    // { 0: ['Factor A', ...], 1: [...] }
+      caseText,            // Case study text
+      studentPaperText,    // Student paper text
+      llmInteractions,     // Optional LLM interaction log
+      pointsPossible,      // Total assignment points
+      year,                // Academic year (from settings)
+      section,             // Course section (from settings)
+      caseName,            // Case name (from settings)
+      team,                // Team name/number (from settings)
+      harshness,           // Slider value 75-100
+      adjustedScores       // { absent, incomplete, partial, strong, mastery }
     } = req.body;
 
-    // Build the full Claude prompt from all inputs
     const prompt = buildGradingPrompt(
-      chipContexts,
-      priorityChipName,
-      questions,
-      rubricSelections,
-      caseText,
-      studentPaperText,
-      llmInteractions,
-      pointsPossible
+      chipContexts, priorityChipName, questions, rubricSelections,
+      caseText, studentPaperText, llmInteractions, pointsPossible,
+      harshness, adjustedScores
     );
 
     // Call Claude API
@@ -62,21 +59,18 @@ app.post('/grade', async (req, res) => {
       },
       body: JSON.stringify({
         model: 'claude-opus-4-5',
-        max_tokens: 8000,
+        max_tokens: 10000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const claudeData = await claudeResponse.json();
 
-    // If Claude returned an error, surface it clearly
     if (!claudeResponse.ok) {
-      throw new Error('Claude API error: ' + (claudeData.error?.message || 'Unknown error'));
+      throw new Error('Claude API error: ' + (claudeData.error?.message || 'Unknown'));
     }
 
     const responseText = claudeData.content[0].text;
-
-    // Extract the JSON block from Claude's response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Claude did not return valid JSON. Raw: ' + responseText.slice(0, 300));
@@ -84,12 +78,20 @@ app.post('/grade', async (req, res) => {
 
     const gradingResult = JSON.parse(jsonMatch[0]);
 
-    // Save to Google Sheets in the background (won't slow down the response)
+    // Add per-question percentages
+    if (gradingResult.questions) {
+      gradingResult.questions.forEach(q => {
+        q.questionPct = q.questionMax > 0
+          ? parseFloat(((q.questionTotal / q.questionMax) * 100).toFixed(1))
+          : 0;
+      });
+    }
+
+    // Log to Google Sheets (non-blocking)
     saveToSheets(gradingResult, req.body).catch(err =>
       console.error('Google Sheets save failed:', err.message)
     );
 
-    // Send the grading result back to the browser
     res.json({ success: true, result: gradingResult });
 
   } catch (err) {
@@ -101,101 +103,98 @@ app.post('/grade', async (req, res) => {
 
 // ============================================================
 // buildGradingPrompt
-// Assembles all professor inputs into one structured prompt
 // ============================================================
 function buildGradingPrompt(
-  chipContexts,
-  priorityChipName,
-  questions,
-  rubricSelections,
-  caseText,
-  studentPaperText,
-  llmInteractions,
-  pointsPossible
+  chipContexts, priorityChipName, questions, rubricSelections,
+  caseText, studentPaperText, llmInteractions, pointsPossible,
+  harshness, adjustedScores
 ) {
+  const scores = adjustedScores || { absent: 0, incomplete: 0.25, partial: 0.50, strong: 0.75, mastery: 1.0 };
 
-  // --- Build the frameworks section ---
+  // Frameworks section
   let frameworkSection = '';
   chipContexts.forEach(chip => {
-    if (chip.name === priorityChipName) {
-      frameworkSection += `\n\n=== PRIORITY FRAMEWORK (weight this most heavily): ${chip.name} ===\n${chip.content}`;
-    } else {
-      frameworkSection += `\n\n=== Supporting Framework: ${chip.name} ===\n${chip.content}`;
-    }
+    const isPriority = chip.name === priorityChipName;
+    frameworkSection += `\n\n=== ${isPriority ? 'PRIORITY FRAMEWORK (weight most heavily)' : 'Supporting Framework'}: ${chip.name} ===\n${chip.content}`;
   });
 
-  // --- Build the questions + rubric factors section ---
+  // Questions + rubric factors
   let questionsSection = '';
   questions.forEach((q, i) => {
     const factors = rubricSelections[i] || [];
-    questionsSection += `\nQUESTION ${i + 1}: ${q}\nApplicable rubric factors for this question:\n`;
-    factors.forEach(f => {
-      questionsSection += `  - ${f}\n`;
-    });
+    questionsSection += `\nQUESTION ${i + 1}: ${q}\nApplicable rubric factors:\n`;
+    factors.forEach(f => { questionsSection += `  - ${f}\n`; });
   });
 
-  // --- Add prompt coaching instruction if LLM log was provided ---
-  const promptCoachingInstruction = llmInteractions
-    ? `\nAlso review the student LLM interaction log at the end. Act as a Prompt Engineering Coach. Identify: (1) what they did well, (2) specific weaknesses in their prompting strategy, (3) concrete, actionable improvements.`
+  // Prompt coaching instruction
+  const coachingInstruction = llmInteractions
+    ? `\nAlso review the student LLM interaction log. Act as a Prompt Engineering Coach: identify (1) what they did well, (2) specific weaknesses in their prompting strategy, (3) concrete actionable improvements.`
     : '';
 
-  // --- Assemble the full prompt ---
   return `You are an expert Innovation professor grading a student group paper.
 
-=== YOUR GRADING FRAMEWORKS ===
-Use these to evaluate the quality of student thinking.
+=== GRADING FRAMEWORKS ===
+Use these frameworks to evaluate the quality of student thinking.
 The PRIORITY framework carries the most weight in your assessment.
 ${frameworkSection}
 
 
 === CASE STUDY TEXT ===
-${caseText || '[No case text was provided — grade based on student paper only]'}
+${caseText || '[No case text provided - grade based on student paper only]'}
 
 
 === QUESTIONS AND THEIR RUBRIC FACTORS ===
-Grade ONLY the factors listed for each question.
-Do not introduce factors that are not listed.
+Grade ONLY the factors listed for each question. Do not add factors not listed.
 ${questionsSection}
 
 
 === STUDENT PAPER ===
-${studentPaperText || '[No student paper was provided]'}
+${studentPaperText || '[No student paper provided]'}
 
 
-=== GRADING SCALE ===
-For each applicable factor, assign exactly ONE of these scores:
-0    = Factor is completely absent from the response
-0.25 = Factor is mentioned but shows incomplete understanding
-0.5  = Partial understanding of the factor is shown
-0.75 = Strong understanding of the factor is shown
-1    = Mastery of the concept is clearly demonstrated
+=== GRADING SCALE (Harshness: ${harshness || 100}%) ===
+For each factor, assign EXACTLY ONE of these score values:
+- Completely absent from response:          ${scores.absent}
+- Mentioned but incomplete understanding:   ${scores.incomplete}
+- Partial understanding demonstrated:       ${scores.partial}
+- Strong understanding shown:               ${scores.strong}
+- Mastery of concept clearly demonstrated:  ${scores.mastery}
+
+Use ONLY these exact numeric values. Do not round or substitute other values.
 
 
 === YOUR TASKS ===
-1. Score every factor listed for every question using the scale above
-2. Write a 50-word critique per question grounded in the selected frameworks
+1. Score every factor for every question using the scale above
+2. Write a focused 50-word critique per question grounded in the selected frameworks
 3. Calculate totals: per-question and overall
 4. Calculate percentage (totalScore / totalPossible * 100)
 5. If pointsPossible was provided (${pointsPossible || 'not provided'}), calculate finalPoints = percentage * pointsPossible / 100
-${promptCoachingInstruction}
+6. Write a GROUP NARRATIVE SUMMARY with four parts:
+   a. SUPERPOWER: 2-3 sentences on what the group did genuinely well - their insight strength
+   b. IMPROVEMENTS: For each dimension below, 1-2 sentences on where they should go deeper:
+      - Theoretical frameworks from class
+      - Connection to evidence and data
+      - Critical thinking and analysis
+      - Development of alternatives and recommendations
+   c. WATCH FOR: ONE specific, practical, memorable thing to watch for if they encounter a similar case in real life - tied to their actual work in this paper
+   d. ONE-SENTENCE SUMMARY: A single crisp sentence the professor can read months later to remember this grading session
+${coachingInstruction}
 
 ${llmInteractions ? `\n=== STUDENT LLM INTERACTIONS ===\n${llmInteractions}` : ''}
 
 
-=== OUTPUT FORMAT — CRITICAL ===
-Return ONLY a single valid JSON object.
-No markdown. No explanation. No text before or after.
-Follow this exact structure:
+=== OUTPUT FORMAT - CRITICAL ===
+Return ONLY a single valid JSON object. No markdown. No explanation. No text before or after the JSON.
 
 {
   "questions": [
     {
       "questionNumber": 1,
-      "questionText": "the full question text here",
+      "questionText": "full question text",
       "factors": [
         {
           "factorName": "exact factor name as listed",
-          "score": 0.75,
+          "score": ${scores.strong},
           "justification": "one sentence explaining this specific score"
         }
       ],
@@ -207,59 +206,77 @@ Follow this exact structure:
   "totalScore": 7.5,
   "totalPossible": 10.0,
   "percentage": 75.0,
-  "finalPoints": "calculated number or N/A if no point total was entered",
-  "promptCoaching": "coaching feedback on the student LLM usage, or 'No LLM interactions provided'"
+  "finalPoints": "calculated number or N/A",
+  "promptCoaching": "coaching feedback on student LLM usage, or No LLM interactions provided",
+  "narrativeSummary": {
+    "superpower": "2-3 sentences on what the group did really well - their insight superpower",
+    "improvements": "Paragraph covering frameworks depth, evidence connection, critical thinking, and recommendations quality",
+    "watchFor": "One specific practical memorable thing to watch for in future similar cases",
+    "oneSentenceSummary": "One crisp sentence for the professor to jog their memory"
+  }
 }`;
 }
 
 
 // ============================================================
-// saveToSheets
-// Logs each grading session to Google Sheets for trend analysis
+// saveToSheets - via Google Apps Script Web App
+// Sheet columns:
+// A: Timestamp | B: Year | C: Section | D: Case | E: Team |
+// F-O: Q1%-Q10% | P: Final% | Q: Points Earned | R: Points Possible | S: Summary
 // ============================================================
 async function saveToSheets(gradingResult, originalRequest) {
   try {
-    const auth = new GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    if (!process.env.GOOGLE_SCRIPT_URL) {
+      console.log('No GOOGLE_SCRIPT_URL set - skipping Sheets save.');
+      return;
+    }
+
+    // Build Q1-Q10 percentage array (fill unused slots with empty string)
+    const qPcts = Array(10).fill('');
+    if (gradingResult.questions) {
+      gradingResult.questions.forEach((q, i) => {
+        if (i < 10) qPcts[i] = q.questionPct !== undefined ? q.questionPct + '%' : '';
+      });
+    }
+
+    const oneSentence = gradingResult.narrativeSummary?.oneSentenceSummary || '';
+
+    const payload = {
+      timestamp:      new Date().toISOString(),
+      year:           originalRequest.year || '',
+      section:        originalRequest.section || '',
+      caseName:       originalRequest.caseName || '',
+      team:           originalRequest.team || '',
+      q1:  qPcts[0], q2:  qPcts[1], q3:  qPcts[2], q4:  qPcts[3], q5:  qPcts[4],
+      q6:  qPcts[5], q7:  qPcts[6], q8:  qPcts[7], q9:  qPcts[8], q10: qPcts[9],
+      finalPct:       gradingResult.percentage ? gradingResult.percentage + '%' : '',
+      pointsEarned:   gradingResult.finalPoints || '',
+      pointsPossible: originalRequest.pointsPossible || '',
+      summary:        oneSentence
+    };
+
+    const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    // One summary row per grading session
-    const row = [
-      new Date().toISOString(),                                              // A: Timestamp
-      originalRequest.priorityChipName || '',                               // B: Priority framework
-      (originalRequest.chipContexts || []).map(c => c.name).join(', '),    // C: All chips used
-      originalRequest.questions?.length || 0,                               // D: Number of questions
-      gradingResult.totalScore,                                             // E: Raw score earned
-      gradingResult.totalPossible,                                          // F: Max score possible
-      gradingResult.percentage,                                             // G: Percentage
-      gradingResult.finalPoints || 'N/A',                                   // H: Final points
-      originalRequest.pointsPossible || 'N/A'                               // I: Points possible entered
-    ];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'Sheet1!A:I',
-      valueInputOption: 'USER_ENTERED',
-      resource: { values: [row] }
-    });
-
-    console.log('Grading session saved to Google Sheets.');
-
+    const result = await response.json();
+    if (result.success) {
+      console.log('Saved to Google Sheets successfully.');
+    } else {
+      console.error('Apps Script error:', result.error);
+    }
   } catch (err) {
-    // Log the error but don't crash the app
-    console.error('Google Sheets error:', err.message);
+    console.error('Google Sheets save error:', err.message);
   }
 }
 
 
 // ============================================================
-// Start the server
-// Render will set PORT automatically — 3000 is our local fallback
+// Start server
 // ============================================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Innovation Paper Grader running on port ${PORT}`);
+  console.log(`Innovation Paper Grader v2 running on port ${PORT}`);
 });
