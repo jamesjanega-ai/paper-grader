@@ -73,8 +73,9 @@ app.post('/grade', async (req, res) => {
     }
     const gradingResult = JSON.parse(jsonMatch[0]);
 
-    // Inject coaching result (from the separate, isolated call)
-    gradingResult.promptCoaching = coachingText;
+    // Inject coaching result — split into full display text and one-line sheet summary
+    gradingResult.promptCoaching        = coachingText.fullCoaching;
+    gradingResult.promptCoachingSummary = coachingText.summary;
 
     // Add per-question percentages
     if (gradingResult.questions) {
@@ -129,9 +130,24 @@ async function callClaude(prompt, maxTokens = 4000) {
 // ============================================================
 async function callClaudeCoaching(llmInteractions) {
   if (!llmInteractions || !llmInteractions.trim()) {
-    return 'No LLM interactions provided.';
+    return { summary: 'No LLM interactions provided.', fullCoaching: 'No LLM interactions provided.' };
   }
-  return callClaude(buildCoachingPrompt(llmInteractions), 2000);
+  const raw = await callClaude(buildCoachingPrompt(llmInteractions), 2000);
+  try {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        summary:     parsed.summary     || raw.split('.')[0] + '.',
+        fullCoaching: parsed.fullCoaching || raw
+      };
+    }
+  } catch (e) {
+    console.warn('Coaching JSON parse failed, falling back to raw text.');
+  }
+  // Fallback: use first sentence as summary, full text as coaching
+  const firstSentence = raw.split(/[.!?]/)[0].trim() + '.';
+  return { summary: firstSentence, fullCoaching: raw };
 }
 
 
@@ -169,12 +185,14 @@ WEAKNESSES — look for:
 - Asking for style polish before substance is solid
 - Never checking whether the output actually fits the rubric
 
-=== OUTPUT FORMAT ===
-Write 3 clearly labeled paragraphs. Under 300 words total.
-1. WHAT THEY DID WELL (specific, quote from log if useful)
-2. CRITICAL WEAKNESSES (specific, name the pattern)
-3. ACTIONABLE IMPROVEMENTS (concrete next-session changes)`;
-}
+=== OUTPUT FORMAT — CRITICAL ===
+Return ONLY a valid JSON object. No markdown. No text before or after.
+
+{
+  "summary": "One sentence (max 20 words) capturing the single most important coaching insight for professor reference",
+  "fullCoaching": "Three clearly labeled paragraphs under 300 words total: (1) WHAT THEY DID WELL — specific with quotes from log. (2) CRITICAL WEAKNESSES — specific, name the pattern. (3) ACTIONABLE IMPROVEMENTS — concrete next-session changes."
+}`;}
+
 
 
 // ============================================================
@@ -395,7 +413,7 @@ async function saveToSheets(gradingResult, originalRequest) {
       pointsEarned:     gradingResult.finalPoints || '',
       pointsPossible:   originalRequest.pointsPossible || '',
       summary:          gradingResult.narrativeSummary?.oneSentenceSummary || '',
-      promptCoaching:   gradingResult.promptCoaching || '',
+      promptCoaching:   gradingResult.promptCoachingSummary || '',  // one sentence only
       harshness:        originalRequest.harshness ? originalRequest.harshness + '%' : ''
     };
     const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
