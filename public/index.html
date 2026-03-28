@@ -257,8 +257,8 @@
     <div class="section-title">Grading Harshness</div>
     <div class="section-hint">At 100% (fully right), Claude uses the exact rubric scores. Slide left for more leniency — scores between the standard values are interpolated proportionally.</div>
     <div class="slider-track">
-      <span class="slider-end-label">Lenient<br/>(75%)</span>
-      <input type="range" id="harshnessSlider" min="75" max="100" value="100" oninput="updateSlider()" />
+      <span class="slider-end-label">Lenient<br/>(60%)</span>
+      <input type="range" id="harshnessSlider" min="60" max="100" value="100" oninput="updateSlider()" />
       <span class="slider-end-label">Harsh<br/>(100%)</span>
       <span class="slider-val" id="sliderVal">100%</span>
     </div>
@@ -854,12 +854,14 @@ window.addEventListener('DOMContentLoaded', () => {
 // HARSHNESS SLIDER
 // ============================================================
 function computeAdjustedScores(harshness) {
-  const leniency = (100 - harshness) / 25;
+  // harshness: 60 (most lenient) → 100 (exact rubric)
+  // leniency: 1.0 at 60%, 0.0 at 100%
+  const leniency = (100 - harshness) / 40;
   return {
     absent:     0,
-    incomplete: parseFloat((0.25 + leniency * 0.15).toFixed(2)),
-    partial:    parseFloat((0.50 + leniency * 0.15).toFixed(2)),
-    strong:     parseFloat((0.75 + leniency * 0.13).toFixed(2)),
+    incomplete: parseFloat((0.25 + leniency * 0.20).toFixed(2)),  // 0.25 → 0.45
+    partial:    parseFloat((0.50 + leniency * 0.20).toFixed(2)),  // 0.50 → 0.70
+    strong:     parseFloat((0.75 + leniency * 0.15).toFixed(2)),  // 0.75 → 0.90
     mastery:    1.0
   };
 }
