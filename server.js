@@ -263,77 +263,112 @@ Use EXACTLY these values:
 
 
 === BEHAVIORAL ANCHORS ===
-Calibrate every score against these descriptions.
-
-ANALYSIS AND CRITICAL THINKING:
-  ${scores.absent}     = Purely descriptive; recaps facts; no analytical lens applied
-  ${scores.incomplete} = Names a framework but does not apply it to this specific case
-  ${scores.partial}    = Framework applied but analysis is partial; key implications missed
-  ${scores.strong}     = Framework applied correctly to case; defensible conclusions drawn
-  ${scores.mastery}    = Framework used as precision lens; surfaces non-obvious insight
-
-USE OF THEORETICAL FRAMEWORKS:
-  ${scores.absent}     = No frameworks referenced
-  ${scores.incomplete} = Framework name dropped without explaining its components
-  ${scores.partial}    = Framework explained correctly but connection to case is generic
-  ${scores.strong}     = Framework applied with specific case evidence and logic
-  ${scores.mastery}    = Framework generates original insight beyond surface reading
+Use these exact descriptions to calibrate every score. Do not paraphrase or interpret — match the evidence to the description that fits best.
 
 IDENTIFICATION OF KEY ISSUES:
-  ${scores.absent}     = No issues identified; paper restates narrative only
-  ${scores.incomplete} = Issues mentioned but not distinguished from symptoms
-  ${scores.partial}    = Primary issue identified; secondary issues conflated or missed
-  ${scores.strong}     = Primary and secondary issues clearly distinguished with evidence
-  ${scores.mastery}    = Issue hierarchy is insightful, non-obvious, analytically grounded
+  ${scores.absent}     = The response does not identify any relevant problem or challenge from the case.
+  ${scores.incomplete} = The response mentions a problem but misidentifies or omits primary issues.
+  ${scores.partial}    = The response identifies at least one correct issue but does not clearly distinguish primary vs. secondary issues.
+  ${scores.strong}     = The response clearly identifies primary issues and acknowledges secondary ones with minor gaps.
+  ${scores.mastery}    = The response explicitly identifies, prioritizes, and clearly distinguishes all primary and secondary issues in the case.
 
-RECOMMENDATIONS:
-  ${scores.absent}     = No recommendations offered
-  ${scores.incomplete} = Recommendation present but vague
-  ${scores.partial}    = Recommendation specific but lacks feasibility or implementation logic
-  ${scores.strong}     = Recommendation specific, feasible, and tied to the analysis
-  ${scores.mastery}    = Recommendation specific, prioritized, with short and long-term implications
+USE OF THEORETICAL FRAMEWORKS:
+  ${scores.absent}     = No frameworks, models, or theories are used or referenced.
+  ${scores.incomplete} = A framework is mentioned but incorrectly applied or not connected to the case.
+  ${scores.partial}    = A relevant framework is applied but with limited accuracy or depth.
+  ${scores.strong}     = Multiple relevant frameworks are correctly applied with clear links to the case.
+  ${scores.mastery}    = Frameworks are precisely selected, correctly applied, and used to generate meaningful insights beyond surface-level analysis.
+
+ANALYSIS AND CRITICAL THINKING:
+  ${scores.absent}     = The response provides no meaningful analysis or interpretation of the case.
+  ${scores.incomplete} = The response describes the case but does not analyze implications or perspectives.
+  ${scores.partial}    = The response includes some analysis but lacks depth or consideration of alternative perspectives.
+  ${scores.strong}     = The response provides clear, multi-perspective analysis with logical reasoning and implications.
+  ${scores.mastery}    = The response delivers deep, structured analysis that evaluates tradeoffs, consequences, and competing perspectives rigorously.
 
 DEVELOPMENT OF ALTERNATIVES:
-  ${scores.absent}     = No alternatives presented
-  ${scores.incomplete} = One alternative mentioned without evaluation
-  ${scores.partial}    = Multiple alternatives listed but trade-offs not analyzed
-  ${scores.strong}     = Multiple alternatives with clear pros and cons
-  ${scores.mastery}    = Alternatives are distinct, evaluated, and ranked with rationale
+  ${scores.absent}     = No alternatives or solutions are proposed.
+  ${scores.incomplete} = Only one solution is proposed with no consideration of alternatives.
+  ${scores.partial}    = Multiple alternatives are listed but lack meaningful comparison or evaluation.
+  ${scores.strong}     = Multiple viable alternatives are presented with basic pros and cons.
+  ${scores.mastery}    = Multiple high-quality alternatives are clearly compared using explicit criteria and tradeoffs.
+
+RECOMMENDATIONS:
+  ${scores.absent}     = No recommendation is provided.
+  ${scores.incomplete} = A recommendation is stated but not connected to analysis.
+  ${scores.partial}    = A recommendation is provided with limited reasoning or missing implications.
+  ${scores.strong}     = A well-reasoned recommendation is supported by analysis with some consideration of implications.
+  ${scores.mastery}    = A clear, prioritized recommendation is fully justified and includes both short-term and long-term implications.
 
 JUSTIFICATION AND SUPPORT:
-  ${scores.absent}     = Claims made with no supporting evidence
-  ${scores.incomplete} = Evidence referenced but not connected to the specific claim
-  ${scores.partial}    = Some claims supported; others left as assertions
-  ${scores.strong}     = Most claims tied to specific case evidence or framework logic
-  ${scores.mastery}    = All major claims supported; counter-evidence acknowledged
-
-REALISM AND FEASIBILITY:
-  ${scores.absent}     = Recommendations ignore practical constraints entirely
-  ${scores.incomplete} = Feasibility acknowledged in passing but not analyzed
-  ${scores.partial}    = Some constraints considered; gaps remain
-  ${scores.strong}     = Recommendations account for key constraints with rationale
-  ${scores.mastery}    = Implementation logic is specific, staged, accounts for failure modes
-
-CREATIVITY AND ORIGINALITY:
-  ${scores.absent}     = Paper restates case content or generic knowledge
-  ${scores.incomplete} = Minor reframing of the obvious
-  ${scores.partial}    = Some original perspective but anchored in predictable analysis
-  ${scores.strong}     = Non-obvious insight present; at least one non-standard argument
-  ${scores.mastery}    = Original framing that redefines the problem or solution space
-
-ORGANIZATION AND COHERENCE:
-  ${scores.absent}     = No discernible structure; ideas scattered
-  ${scores.incomplete} = Some structure visible but sections do not connect logically
-  ${scores.partial}    = Introduction, body, conclusion present but transitions weak
-  ${scores.strong}     = Clear logical progression; each section builds on the previous
-  ${scores.mastery}    = Structure itself serves the argument; nothing could be reordered
+  ${scores.absent}     = No evidence, data, or case references are used.
+  ${scores.incomplete} = Minimal or irrelevant evidence is included without clear linkage to arguments.
+  ${scores.partial}    = Some relevant evidence is used but inconsistently or superficially.
+  ${scores.strong}     = Arguments are supported with relevant case data or credible sources.
+  ${scores.mastery}    = All key claims are explicitly supported with precise, relevant evidence or data from the case or external sources.
 
 PROFESSIONAL WRITING SKILLS:
-  ${scores.absent}     = Significant errors throughout that impede reading
-  ${scores.incomplete} = Multiple errors that distract from reading
-  ${scores.partial}    = Occasional errors but meaning is clear
-  ${scores.strong}     = Clean, professional prose appropriate for graduate business writing
-  ${scores.mastery}    = Precise, economical writing where word choice enhances the argument
+  ${scores.absent}     = Writing is unclear, unstructured, or contains major grammatical errors.
+  ${scores.incomplete} = Writing is understandable but contains frequent errors or unclear phrasing.
+  ${scores.partial}    = Writing is generally clear with minor errors that do not impede understanding.
+  ${scores.strong}     = Writing is clear, professional, and mostly error-free.
+  ${scores.mastery}    = Writing is concise, precise, polished, and fully professional with no noticeable errors.
+
+ORGANIZATION AND COHERENCE:
+  ${scores.absent}     = The response lacks structure and logical flow.
+  ${scores.incomplete} = The response has minimal structure but ideas are loosely connected.
+  ${scores.partial}    = The response follows a basic structure but transitions or flow are inconsistent.
+  ${scores.strong}     = The response is logically organized with clear sections and progression.
+  ${scores.mastery}    = The response is tightly structured with seamless flow, clear hierarchy, and strong narrative coherence.
+
+CITATION AND REFERENCING:
+  ${scores.absent}     = No citations are provided where required.
+  ${scores.incomplete} = Citations are attempted but incorrect or incomplete.
+  ${scores.partial}    = Some correct citations are included but inconsistently applied.
+  ${scores.strong}     = Citations are mostly correct and consistently applied.
+  ${scores.mastery}    = All sources are properly cited using the correct format with a complete reference list if applicable.
+
+REALISM AND FEASIBILITY:
+  ${scores.absent}     = Recommendations are unrealistic or ignore key constraints.
+  ${scores.incomplete} = Recommendations show limited awareness of feasibility or constraints.
+  ${scores.partial}    = Recommendations are somewhat realistic but overlook important constraints.
+  ${scores.strong}     = Recommendations are practical and consider key financial, operational, or strategic constraints.
+  ${scores.mastery}    = Recommendations are fully realistic, implementable, and explicitly account for constraints and execution complexity.
+
+REFLECTION AND SELF-ASSESSMENT:
+  ${scores.absent}     = No reflection or learning is included.
+  ${scores.incomplete} = Reflection is vague or unrelated to the case.
+  ${scores.partial}    = Reflection identifies learning but lacks depth or specificity.
+  ${scores.strong}     = Reflection clearly identifies learning outcomes and some future questions.
+  ${scores.mastery}    = Reflection is specific, insightful, and identifies clear next steps or areas for further inquiry.
+
+CREATIVITY AND ORIGINALITY:
+  ${scores.absent}     = No original thinking or novel ideas are present.
+  ${scores.incomplete} = Ideas are generic or heavily derivative of common responses.
+  ${scores.partial}    = Some original thinking is present but not fully developed.
+  ${scores.strong}     = The response includes clear original insights or creative approaches.
+  ${scores.mastery}    = The response demonstrates distinctive, novel thinking that meaningfully advances the analysis.
+
+PROFESSIONALISM AND ETHICAL CONSIDERATIONS:
+  ${scores.absent}     = No ethical considerations are addressed.
+  ${scores.incomplete} = Ethical issues are mentioned but not analyzed.
+  ${scores.partial}    = Ethical considerations are identified but not integrated into recommendations.
+  ${scores.strong}     = Ethical implications are clearly discussed and linked to decisions.
+  ${scores.mastery}    = Ethical considerations are deeply integrated into analysis and recommendations with stakeholder awareness.
+
+COMMUNICATION SKILLS:
+  ${scores.absent}     = Ideas are not effectively communicated or are difficult to understand.
+  ${scores.incomplete} = Communication is inconsistent or unclear in key areas.
+  ${scores.partial}    = Communication is generally clear but lacks precision or effectiveness.
+  ${scores.strong}     = Communication is clear and appropriate with effective use of structure or visuals if applicable.
+  ${scores.mastery}    = Communication is highly effective, precise, and tailored to the audience with strong clarity and impact.
+
+PEER AND TEAM EVALUATION:
+  ${scores.absent}     = No evidence of collaboration or contribution.
+  ${scores.incomplete} = Minimal contribution or unclear role in team work.
+  ${scores.partial}    = Some contribution is evident but inconsistent.
+  ${scores.strong}     = Active and constructive participation in team efforts is demonstrated.
+  ${scores.mastery}    = Clear, consistent, and value-adding contribution that improves overall team output is demonstrated.
 
 
 === TWO-PASS GRADING ===
