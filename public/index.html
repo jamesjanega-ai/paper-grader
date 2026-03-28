@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Innovation Paper Grader</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; color: #222; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 20px; }
+
+  h1 { font-size: 26px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 32px; }
+
+  .section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+  .section-title { font-size: 16px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  .section-hint { font-size: 13px; color: #888; margin-bottom: 16px; }
+
+  /* CHIPS */
+  .chips-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .chip {
+    padding: 8px 16px; border-radius: 20px; border: 2px solid #ddd;
+    background: #f9f9f9; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all 0.2s; user-select: none;
+  }
+  .chip:hover { border-color: #4a6cf7; color: #4a6cf7; }
+  .chip.selected { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+  .chip.priority { background: #e67e22; color: #fff; border-color: #e67e22; }
+
+  .priority-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .priority-label { font-size: 13px; color: #555; font-weight: 600; margin-bottom: 6px; }
+  .priority-chip {
+    padding: 6px 14px; border-radius: 20px; border: 2px solid #e67e22;
+    background: #fff; cursor: pointer; font-size: 12px; font-weight: 600;
+    color: #e67e22; transition: all 0.2s;
+  }
+  .priority-chip.active { background: #e67e22; color: #fff; }
+
+  /* QUESTIONS */
+  textarea {
+    width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; resize: vertical; font-family: inherit; line-height: 1.5;
+  }
+  textarea:focus { outline: none; border-color: #4a6cf7; }
+
+  .btn {
+    padding: 10px 22px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-primary { background: #4a6cf7; color: #fff; }
+  .btn-primary:hover { background: #3558e0; }
+  .btn-grade { background: #27ae60; color: #fff; font-size: 16px; padding: 14px 32px; width: 100%; margin-top: 8px; }
+  .btn-grade:hover { background: #1e8449; }
+  .btn-grade:disabled { background: #aaa; cursor: not-allowed; }
+
+  /* RUBRIC BUILDER */
+  .question-block { border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .question-block-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; }
+  .question-label { font-size: 14px; font-weight: 700; color: #333; flex: 1; }
+  .btn-check-all { padding: 4px 12px; border-radius: 6px; border: 1px solid #4a6cf7; background: #fff; color: #4a6cf7; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .btn-check-all:hover { background: #4a6cf7; color: #fff; }
+  .factors-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .factor-item { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+  .factor-item input[type=checkbox] { margin-top: 3px; accent-color: #4a6cf7; flex-shrink: 0; }
+  .factor-text { font-size: 12px; color: #444; line-height: 1.4; }
+  .factor-name { font-weight: 700; }
+
+  /* DROP ZONES */
+  .dropzone {
+    border: 2px dashed #c0c8e0; border-radius: 10px; padding: 28px 20px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: #fafbff;
+    margin-bottom: 8px;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: #4a6cf7; background: #eef1ff; }
+  .dropzone.loaded { border-color: #27ae60; background: #f0fff4; }
+  .dropzone-icon { font-size: 28px; margin-bottom: 8px; }
+  .dropzone-label { font-size: 14px; font-weight: 600; color: #555; margin-bottom: 4px; }
+  .dropzone-hint { font-size: 12px; color: #999; }
+  .dropzone-status { font-size: 12px; color: #27ae60; font-weight: 600; margin-top: 6px; }
+  .paste-area { margin-top: 8px; }
+
+  /* POINTS */
+  .points-row { display: flex; align-items: center; gap: 12px; }
+  .points-row label { font-size: 14px; font-weight: 600; color: #333; }
+  .points-row input[type=number] {
+    width: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 16px; font-weight: 700; text-align: center;
+  }
+
+  /* RESULTS */
+  .results-section { display: none; }
+  .results-section.visible { display: block; }
+
+  .score-banner {
+    background: linear-gradient(135deg, #1a1a2e, #4a6cf7);
+    color: #fff; border-radius: 12px; padding: 28px; text-align: center;
+    margin-bottom: 20px;
+  }
+  .score-pct { font-size: 56px; font-weight: 800; }
+  .score-detail { font-size: 18px; opacity: 0.85; margin-top: 4px; }
+  .score-points { font-size: 22px; font-weight: 700; margin-top: 8px; }
+
+  .question-result { border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .qr-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .qr-title { font-size: 14px; font-weight: 700; color: #1a1a2e; flex: 1; padding-right: 12px; }
+  .qr-score { font-size: 18px; font-weight: 800; color: #4a6cf7; white-space: nowrap; }
+
+  .factor-result { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+  .factor-result:last-child { border-bottom: none; }
+  .fr-score {
+    width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-weight: 800; font-size: 12px; flex-shrink: 0;
+  }
+  .fr-score.s0 { background: #fde8e8; color: #c0392b; }
+  .fr-score.s25 { background: #fef3e2; color: #e67e22; }
+  .fr-score.s50 { background: #fef9e7; color: #f39c12; }
+  .fr-score.s75 { background: #e8f5e9; color: #27ae60; }
+  .fr-score.s100 { background: #e8f0fe; color: #4a6cf7; }
+  .fr-name { font-size: 13px; font-weight: 600; color: #333; flex: 1; }
+  .fr-just { font-size: 12px; color: #666; flex: 2; }
+
+  .critique-box { background: #f8f9ff; border-left: 4px solid #4a6cf7; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-size: 13px; color: #444; line-height: 1.6; }
+
+  .coaching-box { background: #fff8f0; border-left: 4px solid #e67e22; padding: 16px; border-radius: 8px; font-size: 14px; color: #444; line-height: 1.7; }
+
+  .spinner { display: none; text-align: center; padding: 32px; }
+  .spinner.visible { display: block; }
+  .spinner-ring {
+    width: 48px; height: 48px; border: 4px solid #e0e0e0;
+    border-top-color: #4a6cf7; border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-box { background: #fde8e8; border: 1px solid #e74c3c; border-radius: 8px; padding: 16px; color: #c0392b; font-size: 14px; margin-top: 12px; display: none; }
+  .error-box.visible { display: block; }
+
+  @media (max-width: 600px) {
+    .factors-grid { grid-template-columns: 1fr; }
+    .settings-grid { grid-template-columns: 1fr; }
+  }
+
+  /* STEP 0: SESSION SETTINGS */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .settings-field label { font-size: 13px; font-weight: 600; color: #555; display: block; margin-bottom: 6px; }
+  .settings-field input, .settings-field select {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; font-family: inherit; color: #222; background: #fff;
+  }
+  .settings-field input:focus, .settings-field select:focus { outline: none; border-color: #4a6cf7; }
+  .settings-saved { font-size: 12px; color: #27ae60; font-weight: 600; margin-top: 10px; min-height: 18px; }
+
+  /* HARSHNESS SLIDER */
+  .slider-track { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .slider-end-label { font-size: 12px; color: #888; font-weight: 600; white-space: nowrap; }
+  .slider-val { font-size: 22px; font-weight: 800; color: #4a6cf7; min-width: 64px; text-align: center; }
+  input[type=range] { flex: 1; accent-color: #4a6cf7; cursor: pointer; }
+  .score-preview-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .preview-label { font-size: 12px; color: #888; font-weight: 600; margin-right: 4px; }
+  .score-pill { padding: 5px 11px; border-radius: 14px; font-size: 12px; font-weight: 700; }
+  .pill-absent { background: #fde8e8; color: #c0392b; }
+  .pill-incomplete { background: #fef3e2; color: #e67e22; }
+  .pill-partial { background: #fef9e7; color: #f39c12; }
+  .pill-strong { background: #e8f5e9; color: #27ae60; }
+  .pill-mastery { background: #e8f0fe; color: #4a6cf7; }
+
+  /* NARRATIVE SUMMARY */
+  .superpower-box { background: linear-gradient(135deg,#e8f5e9,#f0fff4); border-left: 4px solid #27ae60; padding: 16px 20px; border-radius: 8px; margin-bottom: 14px; }
+  .superpower-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #27ae60; margin-bottom: 6px; }
+  .improvements-box { background: #f8f9ff; border-left: 4px solid #4a6cf7; padding: 16px 20px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; color: #444; line-height: 1.8; }
+  .improvements-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #4a6cf7; margin-bottom: 8px; }
+  .watchfor-box { background: #fff8f0; border: 2px solid #e67e22; border-radius: 8px; padding: 16px 20px; margin-bottom: 14px; }
+  .watchfor-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #e67e22; margin-bottom: 6px; }
+  .one-sentence-box { background: #f5f5f5; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #555; font-style: italic; border-left: 3px solid #bbb; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>📋 Innovation Paper Grader</h1>
+  <p class="subtitle">Select your grading frameworks, build a rubric, drop in the papers, and let Claude grade.</p>
+
+  <!-- ===================== SECTION 0: SESSION SETTINGS ===================== -->
+  <div class="section">
+    <div class="section-title">Step 0 — Session Settings</div>
+    <div class="section-hint">These are saved automatically in your browser and remembered until you change them. Set them once per grading session.</div>
+    <div class="settings-grid">
+      <div class="settings-field">
+        <label for="settingYear">Academic Year</label>
+        <select id="settingYear" onchange="saveSettings()">
+          <option value="2026">2026</option><option value="2027">2027</option>
+          <option value="2028">2028</option><option value="2029">2029</option>
+          <option value="2030">2030</option><option value="2031">2031</option>
+          <option value="2032">2032</option><option value="2033">2033</option>
+          <option value="2034">2034</option><option value="2035">2035</option>
+          <option value="2036">2036</option>
+        </select>
+      </div>
+      <div class="settings-field">
+        <label for="settingSection">Course Section</label>
+        <input type="text" id="settingSection" placeholder="e.g. MBA Section A" oninput="saveSettings()" />
+      </div>
+      <div class="settings-field">
+        <label for="settingCase">Case Name</label>
+        <input type="text" id="settingCase" placeholder="e.g. Brandless CPG Strategy" oninput="saveSettings()" />
+      </div>
+      <div class="settings-field">
+        <label for="settingTeam">Team Name / Number</label>
+        <input type="text" id="settingTeam" placeholder="e.g. Team 4" oninput="saveSettings()" />
+      </div>
+    </div>
+    <div class="settings-saved" id="settingsSaved"></div>
+  </div>
+
+  <!-- ===================== SECTION 1: CHIPS ===================== -->
+  <div class="section">
+    <div class="section-title">Step 1 — Select Active Frameworks</div>
+    <div class="section-hint">Click the topics covered this week. The selected chips give Claude grading context. Then mark one as the Priority (most recently taught).</div>
+
+    <div class="chips-row" id="chipsRow">
+      <div class="chip" data-chip="DTV">Design-to-Value</div>
+      <div class="chip" data-chip="InnovationOpModel">Innovation Op Model</div>
+      <div class="chip" data-chip="InnovationStrategy">Innovation Strategy</div>
+      <div class="chip" data-chip="Storytelling">Innovative Storytelling</div>
+      <div class="chip" data-chip="TeamTraits">Innovation Team Traits</div>
+      <div class="chip" data-chip="InnovatorDNA">Innovator's DNA</div>
+      <div class="chip" data-chip="JTBD">Jobs-to-be-Done</div>
+      <div class="chip" data-chip="TUNA">TUNA</div>
+      <div class="chip" data-chip="CriticalAssumptions">Critical Assumptions</div>
+    </div>
+
+    <div class="priority-label">Priority Framework (most recently taught — weighted most heavily):</div>
+    <div class="priority-row" id="priorityRow">
+      <span style="font-size:13px; color:#aaa;">Select at least one framework above first.</span>
+    </div>
+  </div>
+
+  <!-- ===================== HARSHNESS SLIDER ===================== -->
+  <div class="section">
+    <div class="section-title">Grading Harshness</div>
+    <div class="section-hint">At 100% (fully right), Claude uses the exact rubric scores. Slide left for more leniency — scores between the standard values are interpolated proportionally.</div>
+    <div class="slider-track">
+      <span class="slider-end-label">Lenient<br/>(75%)</span>
+      <input type="range" id="harshnessSlider" min="75" max="100" value="100" oninput="updateSlider()" />
+      <span class="slider-end-label">Harsh<br/>(100%)</span>
+      <span class="slider-val" id="sliderVal">100%</span>
+    </div>
+    <div class="score-preview-row">
+      <span class="preview-label">Score scale:</span>
+      <span class="score-pill pill-absent" id="pill0">Absent = 0</span>
+      <span class="score-pill pill-incomplete" id="pill1">Incomplete = 0.25</span>
+      <span class="score-pill pill-partial" id="pill2">Partial = 0.50</span>
+      <span class="score-pill pill-strong" id="pill3">Strong = 0.75</span>
+      <span class="score-pill pill-mastery" id="pill4">Mastery = 1.0</span>
+    </div>
+  </div>
+
+  <!-- ===================== SECTION 2: QUESTIONS ===================== -->
+  <div class="section">
+    <div class="section-title">Step 2 — Enter This Week's Questions</div>
+    <div class="section-hint">Paste the case questions below, one per line or numbered. Then click "Build Rubric" to generate a factor checklist for each question.</div>
+    <textarea id="questionsInput" rows="6" placeholder="1. What are the key strategic issues facing the company?&#10;2. Apply a relevant innovation framework to analyze the case.&#10;3. What recommendations would you make?"></textarea>
+    <div style="margin-top:12px;">
+      <button class="btn btn-primary" onclick="buildRubric()">Build Rubric →</button>
+    </div>
+  </div>
+
+  <!-- ===================== SECTION 3: RUBRIC BUILDER ===================== -->
+  <div class="section" id="rubricSection" style="display:none;">
+    <div class="section-title">Step 3 — Select Applicable Factors Per Question</div>
+    <div class="section-hint">For each question, check the factors that apply. Only checked factors will be graded.</div>
+    <div id="rubricBuilder"></div>
+  </div>
+
+  <!-- ===================== SECTION 4: DROP ZONES ===================== -->
+  <div class="section">
+    <div class="section-title">Step 4 — Upload Case, Student Paper & LLM Log</div>
+    <div class="section-hint">Drag and drop PDF files onto each zone, or paste text directly. The LLM log is optional.</div>
+
+    <!-- Case PDF -->
+    <div style="margin-bottom:20px;">
+      <div class="dropzone" id="caseZone" onclick="document.getElementById('caseFile').click()"
+        ondragover="handleDragOver(event,'caseZone')"
+        ondragleave="handleDragLeave('caseZone')"
+        ondrop="handleDrop(event,'caseFile','caseZone','caseStatus','caseText')">
+        <div class="dropzone-icon">📄</div>
+        <div class="dropzone-label">Case Study PDF</div>
+        <div class="dropzone-hint">Drag & drop or click to upload</div>
+        <div class="dropzone-status" id="caseStatus"></div>
+      </div>
+      <input type="file" id="caseFile" accept=".pdf" style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
+      <div class="paste-area">
+        <textarea id="caseText" rows="3" placeholder="Or paste case study text here…"></textarea>
+      </div>
+    </div>
+
+    <!-- Student Paper -->
+    <div style="margin-bottom:20px;">
+      <div class="dropzone" id="paperZone" onclick="document.getElementById('paperFile').click()"
+        ondragover="handleDragOver(event,'paperZone')"
+        ondragleave="handleDragLeave('paperZone')"
+        ondrop="handleDrop(event,'paperFile','paperZone','paperStatus','studentPaperText')">
+        <div class="dropzone-icon">📝</div>
+        <div class="dropzone-label">Student Group Paper</div>
+        <div class="dropzone-hint">Drag & drop or click to upload</div>
+        <div class="dropzone-status" id="paperStatus"></div>
+      </div>
+      <input type="file" id="paperFile" accept=".pdf" style="display:none" onchange="handleFileSelect(event,'paperZone','paperStatus','studentPaperText')"/>
+      <div class="paste-area">
+        <textarea id="studentPaperText" rows="3" placeholder="Or paste student paper text here…"></textarea>
+      </div>
+    </div>
+
+    <!-- LLM Interactions -->
+    <div>
+      <div class="dropzone" id="llmZone" onclick="document.getElementById('llmFile').click()"
+        ondragover="handleDragOver(event,'llmZone')"
+        ondragleave="handleDragLeave('llmZone')"
+        ondrop="handleDrop(event,'llmFile','llmZone','llmStatus','llmInteractions')">
+        <div class="dropzone-icon">🤖</div>
+        <div class="dropzone-label">Student LLM Interaction Log (Optional)</div>
+        <div class="dropzone-hint">Drag & drop PDF or paste the conversation text below</div>
+        <div class="dropzone-status" id="llmStatus"></div>
+      </div>
+      <input type="file" id="llmFile" accept=".pdf" style="display:none" onchange="handleFileSelect(event,'llmZone','llmStatus','llmInteractions')"/>
+      <div class="paste-area">
+        <textarea id="llmInteractions" rows="3" placeholder="Or paste LLM conversation log here (optional)…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SECTION 5: POINTS + GRADE ===================== -->
+  <div class="section">
+    <div class="section-title">Step 5 — Set Points & Grade</div>
+    <div class="section-hint">Enter the total points this assignment is worth. Then click Grade Paper.</div>
+    <div class="points-row" style="margin-bottom:16px;">
+      <label for="pointsPossible">Total Points Possible:</label>
+      <input type="number" id="pointsPossible" value="100" min="1" />
+    </div>
+    <div class="error-box" id="errorBox"></div>
+    <button class="btn btn-grade" id="gradeBtn" onclick="gradePaper()">⚡ Grade Paper</button>
+  </div>
+
+  <!-- ===================== SPINNER ===================== -->
+  <div class="spinner" id="spinner">
+    <div class="spinner-ring"></div>
+    <div id="spinnerMsg" style="font-size:14px; color:#666;">Claude is grading the paper. This takes about 30–60 seconds…</div>
+  </div>
+
+  <!-- ===================== RESULTS ===================== -->
+  <div class="results-section" id="resultsSection">
+
+    <div class="score-banner">
+      <div class="score-pct" id="resultPct">—</div>
+      <div class="score-detail" id="resultRaw">Score: — / —</div>
+      <div class="score-points" id="resultPoints"></div>
+    </div>
+
+    <div id="questionResults"></div>
+
+    <!-- NARRATIVE SUMMARY -->
+    <div class="section" id="narrativeSection" style="display:none;">
+      <div class="section-title">🎯 Group Performance Summary</div>
+      <div class="section-hint">AI-generated summary based on all question critiques.</div>
+      <div class="superpower-box" id="superpowerBox">
+        <div class="superpower-label">⚡ Insight Superpower</div>
+        <div id="superpowerText" style="font-size:14px;color:#2d6a4f;line-height:1.7;"></div>
+      </div>
+      <div class="improvements-box" id="improvementsBox">
+        <div class="improvements-label">📈 Where to Dig Deeper</div>
+        <div id="improvementsText" style="line-height:1.8;"></div>
+      </div>
+      <div class="watchfor-box">
+        <div class="watchfor-label">👁 Watch For This Next Time</div>
+        <div id="watchforText" style="font-size:14px;color:#7d4e0f;line-height:1.7;"></div>
+      </div>
+      <div style="margin-top:14px;">
+        <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Professor Memory Note (saved to Google Sheet)</div>
+        <div class="one-sentence-box" id="oneSentenceBox"></div>
+      </div>
+    </div>
+
+    <div class="section" id="coachingSection" style="display:none;">
+      <div class="section-title">🤖 Prompt Engineering Coaching</div>
+      <div class="section-hint">Feedback on how the student group used AI tools.</div>
+      <div class="coaching-box" id="coachingText"></div>
+    </div>
+
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// BACKEND URL — points to your Render server
+// ============================================================
+const BACKEND_URL = 'https://paper-grader.onrender.com';
+
+// ============================================================
+// PDF.js setup
+// ============================================================
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ============================================================
+// FRAMEWORK CONTENT — full GPT instructions per chip
+// ============================================================
+const FRAMEWORKS = {
+
+  DTV: `DESIGN-TO-VALUE (DTV) FRAMEWORK
+DTV is a multi-dimensional, fact-based approach that improves margins through better product design and cost optimization. It is built on consumer, competitive, and supplier insights. Value = Customer Benefit minus Cost.
+
+THREE INSIGHT PILLARS:
+1. Consumer Insights: What customers actually value; willingness-to-pay by attribute; avoid no-man's-land designs.
+2. Competitive Insights: Benchmark competitors' design choices; identify over-engineering or unnecessary cost.
+3. Supplier/Cost Insights: Understand true cost drivers (materials, manufacturing, design complexity); use clean-sheet thinking.
+
+CORE PRINCIPLES:
+- Value is defined by what customers are willing to pay for specific attributes. Not all features create value — many add cost without improving preference.
+- DTV requires marketing, R&D, and operations working together from the start.
+- Avoid component-level optimization only. Focus on end-to-end product experience and cost structure.
+- Reject intuition-only reasoning. Require data, trade-offs, and explicit assumptions.
+
+COMMON MISTAKES TO FLAG:
+- Confusing more features with more value
+- Ignoring willingness-to-pay
+- Optimizing components instead of system
+- Treating DTV as cost cutting only
+- Ignoring competitive benchmarks
+- Lack of cross-functional thinking
+
+DTV IS ABOUT: Maximizing value per dollar spent. Designing products customers actually value. Eliminating waste disguised as features.`,
+
+  InnovationOpModel: `INNOVATION MANAGEMENT OPERATING MODEL FRAMEWORK
+This framework uses the CES Capability Model and Innovation Stack to evaluate innovation systems.
+
+CES CAPABILITY MODEL:
+- Conceptualization: Opportunity identification, strategic narratives (fear/greed framing), business model hypotheses.
+- Experimentation: Hypothesis-driven testing, evidence generation (A/B, pilots, MVPs), learning velocity over certainty.
+- Scaling: Resource mobilization, business integration or spinout, operationalization and growth.
+CES is a capability system, not stages — all must exist and interact.
+
+INNOVATION STACK (Operating Model Lens):
+1. Governance (Top-down): Strategic intent, risk appetite, time horizons, resource allocation authority, independence vs integration.
+2. Portfolio Management (Middle layer): Resource allocation across horizons, balance of incremental vs breakthrough, kill/scale decision logic, metrics alignment.
+3. Execution System (Bottom layer): Discovery (opportunity + concept creation), Incubation (experimentation + validation), Acceleration (scaling + integration).
+
+DIAGNOSTIC HEURISTICS:
+- Governance failure: No clear strategic intent, no protected funding.
+- Portfolio failure: Too many projects, no kill criteria, overweight incremental.
+- Discovery failure: Weak opportunity framing, no customer insight.
+- Incubation failure: No experimentation discipline, decisions based on opinion.
+- Acceleration failure: No scaling pathway, core business rejection.
+
+KEY PRINCIPLES:
+- Innovation is a SYSTEM, not an activity.
+- Experimentation over intuition — push for hypothesis-driven learning.
+- Breakthrough innovation requires different rules — separate from core business metrics.
+- Scaling is the hardest problem — most organizations over-focus on ideation.`,
+
+  InnovationStrategy: `INNOVATION STRATEGY FRAMEWORK
+All innovation must be explicitly tied to company strategic intent, growth goals, and competitive context.
+
+PORTFOLIO-BASED THINKING:
+- Horizon 1 (H1): Core/incremental
+- Horizon 2 (H2): Adjacent/expansion
+- Horizon 3 (H3): Transformational/breakthrough
+Avoid over-weighting incremental innovation. Balance exploration vs exploitation.
+
+INTERNAL VS EXTERNAL INNOVATION:
+- Internal: R&D, product, business units
+- External: partnerships, startups, M&A, ecosystems
+Tie to capability gaps and speed vs control trade-offs.
+
+DYNAMIC CAPABILITIES LENS:
+- Sensing (opportunity identification)
+- Seizing (resource allocation)
+- Reconfiguring (organizational change)
+
+REQUIRED STRATEGY ELEMENTS:
+1. Strategic Intent Alignment: What is the company trying to achieve?
+2. Innovation Portfolio Design: % allocation across H1/H2/H3 with rationale.
+3. Internal vs External Mix: Specify % and types of external sources.
+4. Strategic Coherence Stack: Vision → Mission → Key Objectives → Application Strategies → Operating Model Tactics.
+5. Innovation System Design: Discovery → Incubation → Scaling.
+6. Operating Model & Governance: Decision rights, funding mechanisms, organizational structure, talent model.
+7. Metrics & KPIs: Portfolio metrics, experimentation metrics, horizon-specific success metrics.
+8. Risks & Trade-offs: Portfolio imbalance, organizational resistance, resource constraints, cannibalization.
+
+OPERATING UNDER UNCERTAINTY (VUCA):
+Strategies must include scenario thinking, learning loops, and adaptive decision-making.`,
+
+  Storytelling: `ENTREPRENEURIAL STORYTELLING FRAMEWORK
+Entrepreneurial storytelling is a core capability for securing resources, aligning stakeholders, and driving change in uncertain environments.
+
+CORE ELEVATOR PITCH FRAMEWORK:
+1. Actor (Customer): Who is experiencing the problem?
+2. Problem: What pain point or unmet need exists?
+3. Insight/Expert View: Why does this problem matter now?
+4. Solution: What is being proposed?
+5. Evidence/Validation Path: How will this be tested or proven?
+6. Value: What is the upside (growth, efficiency, competitive advantage)?
+7. Ask: What is needed (resources, approval, next step)?
+
+KBFA FRAMEWORK (Know → Believe → Feel → Act):
+- Know: What facts does the audience understand?
+- Believe: What conclusions do they draw from those facts?
+- Feel: What emotional response follows (fear, urgency, excitement)?
+- Act: What action do they take?
+To change action, you must change inputs upstream (facts and framing), not just argue for action.
+
+AUDIENCE TAILORING:
+- Executives: Strategic alignment, growth, risk framing
+- Middle management: Resource trade-offs, feasibility
+- Operators: Execution clarity, workload impact
+- Investors: Market size, scalability, return
+
+FRAMING ARCHETYPES:
+- Fear (Burning Platform): If we do nothing, we lose...
+- Greed (Growth Opportunity): If we act, we capture...
+
+COMMON MISTAKES:
+- No clear customer (too abstract)
+- Solution-first thinking (no problem grounding)
+- Weak or missing evidence path
+- No emotional framing (missing KBFA Feel)
+- Generic value claims
+- No clear ask
+- One-size-fits-all messaging`,
+
+  TeamTraits: `INNOVATION TRAITS AND TEAM COMPOSITION FRAMEWORK
+Innovation effectiveness comes from diverse, interacting traits, not a single type.
+
+FUNCTIONAL ARCHETYPES:
+1. Visionaries (Conceptualizers): Generate bold ideas, see future possibilities. Weakness: lack follow-through.
+2. Experimenters (Validators): Test assumptions, learn through iteration. Weakness: may stall without direction.
+3. Operators (Executors/Scalers): Deliver results, build systems and processes. Weakness: resist ambiguity.
+4. Connectors (Collaborators/Influencers): Build alignment, translate across groups. Weakness: may avoid hard trade-offs.
+5. Multipliers (Leaders): Amplify others' capabilities, create environments for innovation. Weakness: if absent, teams underperform regardless of talent.
+
+TEAM MIX EVALUATION:
+Coverage: Does the team include idea generation, testing/learning, execution/scaling, alignment/influence?
+Balance: Over-indexed on ideas → no execution. Over-indexed on execution → no innovation. Over-indexed on consensus → slow decisions.
+Gaps: Explicitly identify missing roles, underdeveloped capabilities, bottlenecks.
+Friction Points: Conflicting mindsets, misaligned incentives, communication breakdowns.
+
+LEADERSHIP MULTIPLIER:
+Always evaluate whether leadership expands or constrains team capability, encourages experimentation, enables autonomy. Highlight when leadership is the primary bottleneck.
+
+ADVICE RULES:
+- Be specific: Pair Visionaries with Experimenters to test assumptions within 2 weeks.
+- Role-based: Tailor advice to individual trait, team composition, context.
+- Actionable: What to do, who should do it, what outcome to expect.`,
+
+  InnovatorDNA: `INNOVATOR'S DNA FRAMEWORK
+Five discovery skills that distinguish innovative thinkers.
+
+THE FIVE DISCOVERY SKILLS:
+1. Associating: Connecting seemingly unrelated ideas, problems, or domains. The central innovation skill.
+2. Questioning: Challenging assumptions and asking what if, why, and why not. Includes constraint questioning and assumption reversal.
+3. Observing: Watching behaviors, especially customers, to uncover unmet needs. Goes beyond what people say to what they do.
+4. Networking: Engaging with diverse people to gain new perspectives. Deliberate exposure to different industries, disciplines, and viewpoints.
+5. Experimenting: Testing ideas through prototypes, pilots, and iteration. Willingness to try, fail, and learn fast.
+
+ASSESSMENT DIMENSIONS:
+1. Conceptual Understanding: Do they correctly define or recognize the skills?
+2. Application Ability: Can they apply the skills to real situations?
+3. Depth of Thinking: Are they going beyond surface-level answers?
+
+COACHING APPROACH:
+- Identify which skills are strong, weak, or missing.
+- Provide concrete behavioral actions tied to specific skills.
+- Encourage cross-skill integration (e.g., questioning + observing together).
+- Ask: What assumptions are you making? (Questioning). What did you notice users actually do? (Observing). What unrelated industry could inspire this? (Associating).
+
+COMMON MISTAKES:
+- Generic innovation advice not tied to a discovery skill.
+- Treating experimentation as just trying things randomly vs. deliberate hypothesis testing.
+- Confusing networking quantity with diversity of perspective.`,
+
+  JTBD: `JOBS-TO-BE-DONE (JTBD) FRAMEWORK
+Customers hire products to make progress. A product is a means, not the goal.
+
+CORE PRINCIPLES:
+- Jobs are defined by: Situation (context), Motivation (push + pull), Desired progress/outcome.
+- Avoid: Feature-based thinking, customer persona stereotypes, purely demographic segmentation.
+
+JOB TYPES:
+- Functional job: The practical task to be accomplished.
+- Emotional job: How the customer wants to feel.
+- Social job: How the customer wants to be perceived.
+
+THE FOUR FORCES:
+- Push of the current situation: What's wrong with the current solution?
+- Pull of the new solution: What's attractive about the alternative?
+- Anxiety of change: What fears exist about switching?
+- Habit of the present: What inertia keeps them with the status quo?
+
+JOB STATEMENT FORMAT: When [situation], I want to [motivation/action], so I can [desired outcome].
+
+MODES:
+Advisor Mode: Identify the underlying job, define functional/emotional/social dimensions, map customer situation, highlight pain points and constraints, recommend solutions aligned to the job.
+Assessment Mode: Evaluate correct job identification (outcome-based vs product-based), use of situation, causality (push/pull/anxiety/habit), avoidance of demographics-only reasoning.
+
+COMMON MISTAKES TO FLAG:
+- The job is to use [product] — wrong, product names are not jobs.
+- Segmenting by age/income instead of situation.
+- Confusing solutions with jobs.
+- Ignoring emotional or social dimensions.
+- Treating innovation as feature improvement instead of progress.`,
+
+  TUNA: `TUNA FRAMEWORK
+TUNA = Turbulence, Uncertainty, Novelty, Ambiguity — a lens for diagnosing complex environments.
+
+DEFINITIONS:
+- Turbulence: Rapid, unpredictable change → requires adaptation and probing.
+- Uncertainty: Unknown outcomes → requires assumption testing.
+- Novelty: No precedent → requires learning and experimentation.
+- Ambiguity: Multiple interpretations → requires sensemaking and reframing.
+
+MANDATORY RESPONSE LOGIC:
+Step 1 — TUNA Diagnosis: Identify which dimensions are present and at what strength (Low/Medium/High).
+Step 2 — Implications: How does TUNA affect decision-making, risk, and information reliability?
+Step 3 — Actionable Advice by TUNA type:
+  - Turbulence: Probe, shorten cycles, act in real time.
+  - Uncertainty: Test assumptions, run experiments, reframe problems.
+  - Novelty: Observe deeply, experiment, use analogies, learn before scaling.
+  - Ambiguity: Reframe, build narratives, explore multiple interpretations.
+Step 4 — DVF Risk Lens:
+  - Desirability: Do users want it?
+  - Feasibility: Can we build/adapt it?
+  - Viability: Can it sustain?
+
+UNDERSTANDING LEVELS:
+- Level 1 Recognition: Defines terms.
+- Level 2 Identification: Spots TUNA in scenarios.
+- Level 3 Application: Suggests correct actions.
+- Level 4 Strategic Mastery: Integrates multiple TUNA dimensions effectively.
+
+IMPORTANT: Do not treat TUNA dimensions as isolated if multiple are present. Always tie actions to a specific TUNA dimension.`,
+
+  CriticalAssumptions: `CRITICAL ASSUMPTIONS (DFV × BMC) FRAMEWORK
+Helps identify and test critical assumptions underlying a business model or idea.
+
+CORE PRINCIPLES:
+- Assumptions First, Solutions Second: Always separate what must be true (assumption) from what we plan to do (solution).
+- A critical assumption is: High uncertainty + high impact on success.
+- Focus on unknowns over knowns, risks over features.
+
+DFV FRAMEWORK:
+- Desirability (D): Customer has the problem; customer cares enough to act/pay; solution creates meaningful value.
+- Feasibility (F): We can build/deliver the solution; technology works; organization can support it.
+- Viability (V): Revenue model works; costs are sustainable; unit economics scale.
+
+BMC MAPPING:
+Customer Segments → who the customer is
+Value Proposition → why they care
+Channels → how we reach them
+Customer Relationships → how they engage
+Revenue Streams → how we make money
+Key Activities → what must be done
+Key Resources → what is required
+Key Partners → external dependencies
+Cost Structure → cost drivers
+
+WORKFLOW:
+Step 1: Extract assumptions (implicit and explicit), rewrite as testable statements: We believe that [customer] will [behavior] because [reason].
+Step 2: Classify each assumption by DFV category and BMC block.
+Step 3: Prioritize top 3-5 critical assumptions by uncertainty × impact.
+Step 4: Generate testable hypotheses: If we do X, then Y% of customers will do Z.
+Step 5: Recommend fast, low-cost experiments with clear success signals.
+
+STRONG ASSUMPTIONS ARE: Clearly falsifiable, behavior-based (not opinions), linked to outcomes.
+WEAK ASSUMPTIONS ARE: Vague (customers will like it), non-testable, embedding solutions.`
+};
+
+// ============================================================
+// RUBRIC FACTORS (15 total)
+// ============================================================
+const RUBRIC_FACTORS = [
+  { name: "Identification of Key Issues", desc: "Recognizes and articulates the main problems or challenges. Distinguishes between primary and secondary issues." },
+  { name: "Use of Theoretical Frameworks", desc: "Applies relevant business theories, models, or frameworks. Demonstrates understanding of course material applied to real-world scenarios." },
+  { name: "Analysis and Critical Thinking", desc: "Provides thorough and insightful analysis considering various perspectives. Evaluates implications of the issues identified." },
+  { name: "Development of Alternatives", desc: "Proposes multiple viable solutions or strategies. Considers pros and cons of each alternative." },
+  { name: "Recommendations", desc: "Offers well-reasoned recommendations based on the analysis. Includes short-term and long-term implications." },
+  { name: "Justification and Support", desc: "Supports arguments with evidence from the case or external sources. Uses data and research to substantiate claims." },
+  { name: "Professional Writing Skills", desc: "Presents information in a clear, structured, and professional manner. Uses proper grammar, punctuation, and spelling." },
+  { name: "Organization and Coherence", desc: "Organizes content logically with a clear introduction, body, and conclusion. Maintains coherence throughout." },
+  { name: "Citation and Referencing", desc: "Properly cites sources using appropriate academic referencing style. Includes a bibliography if external sources are used." },
+  { name: "Realism and Feasibility", desc: "Ensures recommendations are practical, realistic, and implementable. Considers financial, operational, and strategic constraints." },
+  { name: "Reflection and Self-Assessment", desc: "Reflects on learning outcomes from the case study. Identifies areas for further research or unanswered questions." },
+  { name: "Creativity and Originality", desc: "Demonstrates original thinking and creativity in problem-solving. Offers unique insights or innovative approaches." },
+  { name: "Professionalism and Ethical Considerations", desc: "Addresses ethical implications and proposed solutions. Demonstrates awareness of CSR and stakeholder impact." },
+  { name: "Communication Skills", desc: "Effectively communicates ideas in written form. Uses clear structure and language appropriate for the audience." },
+  { name: "Peer and Team Evaluation", desc: "Contributes to team discussions and development of group analysis. Works collaboratively to enhance overall quality." }
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let selectedChips = new Set();
+let priorityChip = null;
+let parsedQuestions = [];
+let rubricSelections = {}; // { questionIndex: Set of factor names }
+
+// ============================================================
+// STEP 0: SETTINGS — localStorage persistence
+// ============================================================
+function saveSettings() {
+  localStorage.setItem('pg_year', document.getElementById('settingYear').value);
+  localStorage.setItem('pg_section', document.getElementById('settingSection').value);
+  localStorage.setItem('pg_case', document.getElementById('settingCase').value);
+  localStorage.setItem('pg_team', document.getElementById('settingTeam').value);
+  const saved = document.getElementById('settingsSaved');
+  saved.textContent = '✅ Settings saved';
+  setTimeout(() => { saved.textContent = ''; }, 2000);
+}
+
+function loadSettings() {
+  const year = localStorage.getItem('pg_year');
+  const section = localStorage.getItem('pg_section');
+  const caseVal = localStorage.getItem('pg_case');
+  const team = localStorage.getItem('pg_team');
+  if (year) document.getElementById('settingYear').value = year;
+  if (section) document.getElementById('settingSection').value = section;
+  if (caseVal) document.getElementById('settingCase').value = caseVal;
+  if (team) document.getElementById('settingTeam').value = team;
+}
+
+// Load saved settings when page opens
+window.addEventListener('DOMContentLoaded', loadSettings);
+
+// ============================================================
+// HARSHNESS SLIDER
+// ============================================================
+function computeAdjustedScores(harshness) {
+  // harshness: 75 (lenient) → 100 (harsh)
+  // leniency: 1.0 (at 75%) → 0.0 (at 100%)
+  const leniency = (100 - harshness) / 25;
+  return {
+    absent:     0,
+    incomplete: parseFloat((0.25 + leniency * 0.15).toFixed(2)),  // 0.25 → 0.40
+    partial:    parseFloat((0.50 + leniency * 0.15).toFixed(2)),  // 0.50 → 0.65
+    strong:     parseFloat((0.75 + leniency * 0.13).toFixed(2)),  // 0.75 → 0.88
+    mastery:    1.0
+  };
+}
+
+function updateSlider() {
+  const val = parseInt(document.getElementById('harshnessSlider').value);
+  document.getElementById('sliderVal').textContent = val + '%';
+  const s = computeAdjustedScores(val);
+  document.getElementById('pill0').textContent = `Absent = ${s.absent}`;
+  document.getElementById('pill1').textContent = `Incomplete = ${s.incomplete}`;
+  document.getElementById('pill2').textContent = `Partial = ${s.partial}`;
+  document.getElementById('pill3').textContent = `Strong = ${s.strong}`;
+  document.getElementById('pill4').textContent = `Mastery = ${s.mastery}`;
+}
+
+// Initialize slider display on load
+window.addEventListener('DOMContentLoaded', updateSlider);
+
+// ============================================================
+// CHIP SELECTION
+// ============================================================
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const key = chip.dataset.chip;
+    if (selectedChips.has(key)) {
+      selectedChips.delete(key);
+      chip.classList.remove('selected');
+      if (priorityChip === key) priorityChip = null;
+    } else {
+      selectedChips.add(key);
+      chip.classList.add('selected');
+    }
+    renderPriorityRow();
+  });
+});
+
+function renderPriorityRow() {
+  const row = document.getElementById('priorityRow');
+  if (selectedChips.size === 0) {
+    row.innerHTML = '<span style="font-size:13px; color:#aaa;">Select at least one framework above first.</span>';
+    return;
+  }
+  row.innerHTML = '';
+  selectedChips.forEach(key => {
+    const label = document.querySelector(`.chip[data-chip="${key}"]`).textContent;
+    const btn = document.createElement('div');
+    btn.className = 'priority-chip' + (priorityChip === key ? ' active' : '');
+    btn.textContent = label;
+    btn.onclick = () => {
+      priorityChip = key;
+      renderPriorityRow();
+    };
+    row.appendChild(btn);
+  });
+}
+
+// ============================================================
+// RUBRIC BUILDER
+// ============================================================
+
+// These two factors are unchecked by default — professor opts in manually
+const FACTORS_OPT_IN = new Set([
+  'Professionalism and Ethical Considerations',
+  'Peer and Team Evaluation'
+]);
+
+function buildRubric() {
+  const raw = document.getElementById('questionsInput').value.trim();
+  if (!raw) { alert('Please enter at least one question.'); return; }
+
+  // Split on numbered lines
+  parsedQuestions = raw
+    .split(/\n/)
+    .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
+    .filter(l => l.length > 0);
+
+  rubricSelections = {};
+
+  // Pre-select all non-opt-in factors for every question
+  parsedQuestions.forEach((_, i) => {
+    rubricSelections[i] = new Set(
+      RUBRIC_FACTORS
+        .filter(f => !FACTORS_OPT_IN.has(f.name))
+        .map(f => f.name)
+    );
+  });
+
+  const builder = document.getElementById('rubricBuilder');
+  builder.innerHTML = '';
+
+  parsedQuestions.forEach((q, i) => {
+    const block = document.createElement('div');
+    block.className = 'question-block';
+    block.innerHTML = `
+      <div class="question-block-header">
+        <div class="question-label">Q${i+1}: ${q}</div>
+        <button class="btn-check-all" onclick="toggleAllFactors(${i}, this)">Uncheck All</button>
+      </div>
+      <div class="factors-grid" id="factors_${i}"></div>`;
+    builder.appendChild(block);
+
+    const grid = document.getElementById(`factors_${i}`);
+    RUBRIC_FACTORS.forEach(factor => {
+      const isChecked = !FACTORS_OPT_IN.has(factor.name); // checked unless opt-in
+      const item = document.createElement('label');
+      item.className = 'factor-item';
+      item.innerHTML = `
+        <input type="checkbox" data-q="${i}" data-factor="${factor.name}"
+          ${isChecked ? 'checked' : ''}
+          onchange="toggleFactor(${i},'${factor.name}',this.checked)" />
+        <span class="factor-text"><span class="factor-name">${factor.name}:</span> ${factor.desc}</span>`;
+      grid.appendChild(item);
+    });
+  });
+
+  document.getElementById('rubricSection').style.display = 'block';
+  document.getElementById('rubricSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleFactor(qIndex, factorName, checked) {
+  if (checked) rubricSelections[qIndex].add(factorName);
+  else rubricSelections[qIndex].delete(factorName);
+}
+
+// Check All / Uncheck All toggle button per question
+function toggleAllFactors(qIndex, btn) {
+  const checkboxes = document.querySelectorAll(`input[data-q="${qIndex}"]`);
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+  checkboxes.forEach(cb => {
+    cb.checked = !allChecked;
+    toggleFactor(qIndex, cb.dataset.factor, !allChecked);
+  });
+
+  btn.textContent = allChecked ? 'Check All' : 'Uncheck All';
+}
+
+// ============================================================
+// PDF EXTRACTION
+// ============================================================
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(item => item.str).join(' ') + '\n';
+  }
+  return text;
+}
+
+// ============================================================
+// DRAG AND DROP
+// ============================================================
+function handleDragOver(event, zoneId) {
+  event.preventDefault();
+  document.getElementById(zoneId).classList.add('dragover');
+}
+function handleDragLeave(zoneId) {
+  document.getElementById(zoneId).classList.remove('dragover');
+}
+
+async function handleDrop(event, inputId, zoneId, statusId, textAreaId) {
+  event.preventDefault();
+  document.getElementById(zoneId).classList.remove('dragover');
+  const file = event.dataTransfer.files[0];
+  if (file) await processFile(file, zoneId, statusId, textAreaId);
+}
+
+async function handleFileSelect(event, zoneId, statusId, textAreaId) {
+  const file = event.target.files[0];
+  if (file) await processFile(file, zoneId, statusId, textAreaId);
+}
+
+async function processFile(file, zoneId, statusId, textAreaId) {
+  const zone = document.getElementById(zoneId);
+  const status = document.getElementById(statusId);
+  const textarea = document.getElementById(textAreaId);
+
+  status.textContent = 'Reading PDF…';
+  zone.classList.add('dragover');
+
+  try {
+    const text = await extractPdfText(file);
+    textarea.value = text;
+    zone.classList.remove('dragover');
+    zone.classList.add('loaded');
+    status.textContent = `✅ ${file.name} loaded (${text.length.toLocaleString()} characters)`;
+  } catch (err) {
+    zone.classList.remove('dragover');
+    status.textContent = '❌ Could not read PDF. Try pasting text below instead.';
+    console.error(err);
+  }
+}
+
+// ============================================================
+// GRADE PAPER
+// ============================================================
+async function gradePaper() {
+  const errorBox = document.getElementById('errorBox');
+  errorBox.className = 'error-box';
+  errorBox.textContent = '';
+
+  // Validation
+  if (selectedChips.size === 0) {
+    showError('Please select at least one framework chip in Step 1.'); return;
+  }
+  if (!priorityChip) {
+    showError('Please select a Priority Framework in Step 1.'); return;
+  }
+  if (parsedQuestions.length === 0) {
+    showError('Please enter questions and click "Build Rubric" in Step 2.'); return;
+  }
+  const studentPaper = document.getElementById('studentPaperText').value.trim();
+  if (!studentPaper) {
+    showError('Please add the student paper in Step 4 (drop a PDF or paste text).'); return;
+  }
+  const anyFactors = Object.values(rubricSelections).some(s => s.size > 0);
+  if (!anyFactors) {
+    showError('Please check at least one rubric factor for at least one question in Step 3.'); return;
+  }
+
+  // Build payload
+  const chipContexts = Array.from(selectedChips).map(key => ({
+    name: document.querySelector(`.chip[data-chip="${key}"]`).textContent,
+    content: FRAMEWORKS[key]
+  }));
+  const priorityChipName = document.querySelector(`.chip[data-chip="${priorityChip}"]`).textContent;
+  const rubricSelectionsPlain = {};
+  Object.keys(rubricSelections).forEach(i => {
+    rubricSelectionsPlain[i] = Array.from(rubricSelections[i]);
+  });
+  const harshness = parseInt(document.getElementById('harshnessSlider').value);
+  const adjustedScores = computeAdjustedScores(harshness);
+
+  const payload = {
+    chipContexts,
+    priorityChipName,
+    questions: parsedQuestions,
+    rubricSelections: rubricSelectionsPlain,
+    caseText: document.getElementById('caseText').value.trim(),
+    studentPaperText: studentPaper,
+    llmInteractions: document.getElementById('llmInteractions').value.trim(),
+    pointsPossible: parseFloat(document.getElementById('pointsPossible').value) || null,
+    // Session settings
+    year: document.getElementById('settingYear').value,
+    section: document.getElementById('settingSection').value.trim(),
+    caseName: document.getElementById('settingCase').value.trim(),
+    team: document.getElementById('settingTeam').value.trim(),
+    // Harshness
+    harshness,
+    adjustedScores
+  };
+
+  // Disable button and show spinner
+  document.getElementById('gradeBtn').disabled = true;
+  document.getElementById('resultsSection').className = 'results-section';
+  showSpinner('Waking up the grading server… (this takes up to 30 seconds on first use)');
+
+  try {
+    // Step 1: Wake up Render (free tier sleeps after inactivity)
+    // We ping the health check endpoint first and wait up to 35 seconds
+    try {
+      await fetchWithTimeout(`${BACKEND_URL}/`, 35000);
+    } catch (wakeErr) {
+      // If ping fails or times out, we try grading anyway — server might still respond
+      console.warn('Wake-up ping timed out, proceeding anyway:', wakeErr.message);
+    }
+
+    showSpinner('Server is awake. Claude is grading the paper… (30–60 seconds)');
+
+    // Step 2: Send the actual grading request (2 minute timeout — papers can be long)
+    const response = await fetchWithTimeout(`${BACKEND_URL}/grade`, 120000, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'Grading failed.');
+
+    renderResults(data.result, payload.pointsPossible);
+
+  } catch (err) {
+    if (err.message.includes('timed out')) {
+      showError('The request timed out. This usually means the server is still waking up. Wait 30 seconds and try again.');
+    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      showError('Cannot reach the grading server. Check that your Render service is deployed and running, then try again.');
+    } else {
+      showError('Grading failed: ' + err.message);
+    }
+  } finally {
+    document.getElementById('gradeBtn').disabled = false;
+    document.getElementById('spinner').className = 'spinner';
+    document.getElementById('spinnerMsg').textContent = '';
+  }
+}
+
+// Fetch with a timeout — prevents the browser from hanging forever
+function fetchWithTimeout(url, ms, options = {}) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Request timed out after ${ms/1000}s`)), ms);
+    fetch(url, options)
+      .then(res => { clearTimeout(timer); resolve(res); })
+      .catch(err => { clearTimeout(timer); reject(err); });
+  });
+}
+
+function showSpinner(msg) {
+  document.getElementById('spinnerMsg').textContent = msg;
+  document.getElementById('spinner').className = 'spinner visible';
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.className = 'error-box visible';
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ============================================================
+// RENDER RESULTS
+// ============================================================
+function renderResults(result, pointsPossible) {
+  // Score banner
+  const pct = result.percentage ? result.percentage.toFixed(1) : '—';
+  document.getElementById('resultPct').textContent = pct + '%';
+  document.getElementById('resultRaw').textContent =
+    `Score: ${result.totalScore} / ${result.totalPossible}`;
+
+  if (result.finalPoints && result.finalPoints !== 'N/A' && pointsPossible) {
+    document.getElementById('resultPoints').textContent =
+      `Final Grade: ${parseFloat(result.finalPoints).toFixed(1)} / ${pointsPossible} pts`;
+  } else {
+    document.getElementById('resultPoints').textContent = '';
+  }
+
+  // Question results
+  const container = document.getElementById('questionResults');
+  container.innerHTML = '';
+
+  (result.questions || []).forEach(q => {
+    const block = document.createElement('div');
+    block.className = 'question-result';
+
+    const pctQ = q.questionMax > 0 ? ((q.questionTotal / q.questionMax) * 100).toFixed(0) : '—';
+    block.innerHTML = `
+      <div class="qr-header">
+        <div class="qr-title">Q${q.questionNumber}: ${q.questionText}</div>
+        <div class="qr-score">${q.questionTotal}/${q.questionMax} <span style="font-size:13px;color:#888;">(${pctQ}%)</span></div>
+      </div>`;
+
+    (q.factors || []).forEach(f => {
+      const scoreClass = f.score === 0 ? 's0' : f.score <= 0.25 ? 's25' : f.score <= 0.5 ? 's50' : f.score <= 0.75 ? 's75' : 's100';
+      const scoreLabel = f.score === 0 ? '0' : f.score === 0.25 ? '.25' : f.score === 0.5 ? '.50' : f.score === 0.75 ? '.75' : '1.0';
+      const row = document.createElement('div');
+      row.className = 'factor-result';
+      row.innerHTML = `
+        <div class="fr-score ${scoreClass}">${scoreLabel}</div>
+        <div class="fr-name">${f.factorName}</div>
+        <div class="fr-just">${f.justification}</div>`;
+      block.appendChild(row);
+    });
+
+    if (q.critique) {
+      const critiqueBox = document.createElement('div');
+      critiqueBox.className = 'critique-box';
+      critiqueBox.innerHTML = `<strong>Critique:</strong> ${q.critique}`;
+      block.appendChild(critiqueBox);
+    }
+
+    container.appendChild(block);
+  });
+
+  // Prompt coaching
+  if (result.promptCoaching && result.promptCoaching !== 'No LLM interactions provided') {
+    document.getElementById('coachingText').textContent = result.promptCoaching;
+    document.getElementById('coachingSection').style.display = 'block';
+  } else {
+    document.getElementById('coachingSection').style.display = 'none';
+  }
+
+  // Narrative summary
+  const ns = result.narrativeSummary;
+  if (ns) {
+    document.getElementById('superpowerText').textContent = ns.superpower || '';
+    document.getElementById('improvementsText').textContent = ns.improvements || '';
+    document.getElementById('watchforText').textContent = ns.watchFor || '';
+    document.getElementById('oneSentenceBox').textContent = ns.oneSentenceSummary || '';
+    document.getElementById('narrativeSection').style.display = 'block';
+  } else {
+    document.getElementById('narrativeSection').style.display = 'none';
+  }
+
+  // Show results
+  document.getElementById('resultsSection').className = 'results-section visible';
+  document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
