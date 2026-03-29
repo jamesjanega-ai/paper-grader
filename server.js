@@ -57,16 +57,32 @@ app.post('/grade-round', async (req, res) => {
       120000   // 2-minute timeout
     );
 
-    // Parse the questions array from Claude's response
+    // Parse and SANITIZE the questions array from GPT's response.
+    // GPT-4o mini sometimes hallucinates extra factors — filter to rubric-only,
+    // clamp scores to [0,1], recompute totals. Never trust GPT's reported max.
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON found in round response');
     const parsed = JSON.parse(jsonMatch[0]);
 
     const questionResults = (parsed.questions || []).map((q, i) => {
       q.questionNumber = i + 1;
-      if (!q.questionMax || q.questionMax === 0) {
-        q.questionMax = (rubricSelections[i] || []).length;
-      }
+
+      // Rubric factors for this question — the ground truth
+      const allowedFactors = new Set(rubricSelections[i] || []);
+
+      // Filter to only rubric factors, clamp scores to valid range
+      const VALID_SCORES = new Set([0, 0.25, 0.50, 0.75, 1.0]);
+      q.factors = (q.factors || [])
+        .filter(f => allowedFactors.has(f.factorName))
+        .map(f => ({
+          ...f,
+          score: VALID_SCORES.has(f.score) ? f.score : Math.min(1.0, Math.max(0, parseFloat(f.score) || 0))
+        }));
+
+      // Recompute totals from clean factors — never trust GPT's reported values
+      q.questionTotal = parseFloat(q.factors.reduce((s, f) => s + f.score, 0).toFixed(2));
+      q.questionMax   = q.factors.length; // 1.0 per factor
+
       return q;
     });
 
