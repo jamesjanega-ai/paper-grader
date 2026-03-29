@@ -208,6 +208,13 @@
 
   /* FACTOR VARIANCE */
   .factor-variance { font-size: 10px; color: #e67e22; margin-top: 2px; }
+
+  /* CASE PERSISTENCE */
+  .case-zone-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .case-zone-label  { font-size: 13px; font-weight: 600; color: #555; }
+  .btn-clear-case   { padding: 4px 12px; border-radius: 6px; border: 1px solid #e74c3c; background: #fff; color: #e74c3c; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .btn-clear-case:hover { background: #e74c3c; color: #fff; }
+  .btn-clear-case:disabled { border-color: #ddd; color: #ccc; cursor: default; background: #fff; }
   .blind-grade-row { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: #fff8f0; border: 1px solid #e67e22; border-radius: 8px; cursor: pointer; }
   .blind-grade-row input[type=checkbox] { width: 18px; height: 18px; accent-color: #e67e22; flex-shrink: 0; margin-top: 2px; }
   .blind-blind-label { font-size: 13px; color: #555; line-height: 1.5; }
@@ -325,8 +332,12 @@
     <div class="section-title">Step 4 — Upload Case, Student Paper & LLM Log</div>
     <div class="section-hint">Drop PDF, Word (.docx), or .txt files onto each zone — or paste text directly. LLM log is optional.</div>
 
-    <!-- Case PDF -->
+    <!-- Case PDF — persists between sessions until cleared -->
     <div style="margin-bottom:20px;">
+      <div class="case-zone-header">
+        <span class="case-zone-label">Case Study <span id="caseLoadedBadge" style="font-size:11px;color:#27ae60;font-weight:600;display:none;">— loaded from previous session</span></span>
+        <button class="btn-clear-case" id="clearCaseBtn" onclick="clearCase()" disabled>✕ Clear case</button>
+      </div>
       <div class="dropzone" id="caseZone" onclick="document.getElementById('caseFile').click()"
         ondragover="handleDragOver(event,'caseZone')"
         ondragleave="handleDragLeave('caseZone')"
@@ -338,7 +349,7 @@
       </div>
       <input type="file" id="caseFile" accept=".pdf,.txt,.docx,.doc" style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
       <div class="paste-area">
-        <textarea id="caseText" rows="3" placeholder="Or paste case study text here…"></textarea>
+        <textarea id="caseText" rows="3" oninput="saveCaseText()" placeholder="Or paste case study text here…"></textarea>
       </div>
     </div>
 
@@ -899,6 +910,40 @@ function loadSliderState() {
 }
 
 // ============================================================
+// CASE PERSISTENCE — saves case text between sessions
+// ============================================================
+function saveCaseText() {
+  const text = document.getElementById('caseText').value;
+  localStorage.setItem('pg_caseText', text);
+  updateCaseBadge(text.length > 0);
+}
+
+function loadCaseText() {
+  const saved = localStorage.getItem('pg_caseText');
+  if (saved && saved.trim().length > 0) {
+    document.getElementById('caseText').value = saved;
+    document.getElementById('caseZone').classList.add('loaded');
+    document.getElementById('caseStatus').textContent =
+      `✅ Case loaded from previous session (${saved.length.toLocaleString()} characters)`;
+    updateCaseBadge(true);
+  }
+}
+
+function clearCase() {
+  if (!confirm('Clear the saved case? You will need to upload or paste it again for the next grading session.')) return;
+  localStorage.removeItem('pg_caseText');
+  document.getElementById('caseText').value = '';
+  document.getElementById('caseStatus').textContent = '';
+  document.getElementById('caseZone').classList.remove('loaded');
+  updateCaseBadge(false);
+}
+
+function updateCaseBadge(hasCase) {
+  document.getElementById('caseLoadedBadge').style.display = hasCase ? 'inline' : 'none';
+  document.getElementById('clearCaseBtn').disabled = !hasCase;
+}
+
+// ============================================================
 // FULL INITIALIZATION — runs once when page loads
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
@@ -906,6 +951,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadChipsState();  // Step 1: chips + priority
   loadSliderState(); // Harshness slider
   loadRubricState(); // Step 2+3: questions + rubric selections
+  loadCaseText();    // Step 4: case study (persists across sessions)
 });
 
 // ============================================================
@@ -1116,6 +1162,8 @@ async function processFile(file, zoneId, statusId, textAreaId) {
     zone.classList.remove('dragover');
     zone.classList.add('loaded');
     status.textContent = `✅ ${file.name} loaded (${text.length.toLocaleString()} characters)`;
+    // If this is the case zone, persist it automatically
+    if (textAreaId === 'caseText') saveCaseText();
   } catch (err) {
     zone.classList.remove('dragover');
     status.textContent = `❌ ${err.message}. Try pasting text below instead.`;
@@ -1344,6 +1392,16 @@ function setRoundComplete(roundNum, questions) {
 function showSpinner(msg) {
   document.getElementById('spinnerMsg').textContent = msg;
   document.getElementById('spinner').className = 'spinner visible';
+}
+
+// Fetch with a timeout — prevents the browser from hanging forever
+function fetchWithTimeout(url, ms, options = {}) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Request timed out after ${ms/1000}s`)), ms);
+    fetch(url, options)
+      .then(res => { clearTimeout(timer); resolve(res); })
+      .catch(err => { clearTimeout(timer); reject(err); });
+  });
 }
 
 // ============================================================
