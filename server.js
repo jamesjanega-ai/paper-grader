@@ -45,16 +45,22 @@ app.post('/grade-round', async (req, res) => {
 
     const scores = adjustedScores || { absent:0, incomplete:0.25, partial:0.50, strong:0.75, mastery:1.0 };
 
-    // Build one focused prompt per question and fire all in parallel
+    // Build one focused prompt per question.
+    // STAGGERED starts (3s apart) to stay under org token-per-minute rate limits.
+    // Uses Haiku model — faster, cheaper, higher rate limits than Opus,
+    // and fully capable of evidence-based rubric scoring with behavioral anchors.
     const questionPromises = questions.map((question, i) =>
-      callClaudeWithTimeout(
-        buildQuestionPrompt(
-          chipContexts, priorityChipName, question,
-          rubricSelections[i] || [], caseText, studentPaperText,
-          harshness, scores, blindGrade, i + 1
-        ),
-        3500,   // max tokens — one question result is smaller than full paper
-        90000   // 90s timeout per question
+      new Promise(resolve => setTimeout(resolve, i * 3000)).then(() =>
+        callClaudeWithTimeout(
+          buildQuestionPrompt(
+            chipContexts, priorityChipName, question,
+            rubricSelections[i] || [], caseText, studentPaperText,
+            harshness, scores, blindGrade, i + 1
+          ),
+          3500,
+          90000,
+          'claude-haiku-4-5-20251001'  // Haiku: higher rate limits, faster per-question grading
+        )
       )
     );
 
@@ -166,7 +172,7 @@ app.post('/grade-synthesize', async (req, res) => {
 // ============================================================
 // callClaudeWithTimeout — shared API call with abort controller
 // ============================================================
-async function callClaudeWithTimeout(prompt, maxTokens, timeoutMs) {
+async function callClaudeWithTimeout(prompt, maxTokens, timeoutMs, model = 'claude-opus-4-5') {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -180,7 +186,7 @@ async function callClaudeWithTimeout(prompt, maxTokens, timeoutMs) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model:       'claude-opus-4-5',
+        model:       model,
         max_tokens:  maxTokens,
         temperature: 0,
         messages: [{ role: 'user', content: prompt }]
