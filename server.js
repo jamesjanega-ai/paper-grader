@@ -45,26 +45,23 @@ app.post('/grade-round', async (req, res) => {
 
     const scores = adjustedScores || { absent:0, incomplete:0.25, partial:0.50, strong:0.75, mastery:1.0 };
 
-    // Build one focused prompt per question.
-    // STAGGERED starts (3s apart) to stay under org token-per-minute rate limits.
-    // Uses Haiku model — faster, cheaper, higher rate limits than Opus,
-    // and fully capable of evidence-based rubric scoring with behavioral anchors.
-    const questionPromises = questions.map((question, i) =>
-      new Promise(resolve => setTimeout(resolve, i * 3000)).then(() =>
-        callClaudeWithTimeout(
-          buildQuestionPrompt(
-            chipContexts, priorityChipName, question,
-            rubricSelections[i] || [], caseText, studentPaperText,
-            harshness, scores, blindGrade, i + 1
-          ),
-          3500,
-          90000,
-          'claude-haiku-4-5-20251001'  // Haiku: higher rate limits, faster per-question grading
-        )
-      )
-    );
-
-    const rawResults = await Promise.all(questionPromises);
+    // Sequential question calls — one at a time, fully rate-limit safe.
+    // Haiku processes each in ~12-15s. 4 questions ≈ 50-60s per round.
+    // No parallelism = no token burst = no 500 errors regardless of org tier.
+    const rawResults = [];
+    for (let i = 0; i < questions.length; i++) {
+      const text = await callClaudeWithTimeout(
+        buildQuestionPrompt(
+          chipContexts, priorityChipName, questions[i],
+          rubricSelections[i] || [], caseText, studentPaperText,
+          harshness, scores, blindGrade, i + 1
+        ),
+        3500,
+        90000,
+        'claude-haiku-4-5-20251001'
+      );
+      rawResults.push(text);
+    }
 
     // Parse each question JSON
     const questionResults = rawResults.map((text, i) => {
