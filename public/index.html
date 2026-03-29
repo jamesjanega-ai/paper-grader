@@ -190,7 +190,18 @@
   .collapse-toggle { font-size: 12px; font-weight: 600; color: #888; background: #f0f0f0; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer; flex-shrink: 0; }
   .collapse-summary { font-size: 12px; color: #27ae60; font-weight: 600; margin-top: 4px; }
 
-  /* PROGRESS BOARD */
+  /* FACTOR WEIGHTS */
+  .factor-item { display: flex; align-items: flex-start; gap: 8px; }
+  .weight-btns { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+  .wbtn { padding: 1px 7px; border-radius: 4px; border: 1px solid #ddd; background: #f8f8f8; font-size: 10px; font-weight: 700; cursor: pointer; color: #888; transition: all 0.15s; }
+  .wbtn.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+  .wbtn[data-w="2"].active { background: #e67e22; border-color: #e67e22; }
+  .wbtn[data-w="3"].active { background: #e74c3c; border-color: #e74c3c; }
+
+  /* RECALCULATE BUTTON */
+  .btn-recalc { padding: 6px 16px; border-radius: 6px; border: 1px solid #4a6cf7; background: #fff; color: #4a6cf7; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+  .btn-recalc:hover { background: #4a6cf7; color: #fff; }
+  .weight-legend { font-size: 11px; color: #888; margin-top: 6px; }
   .progress-board { padding: 20px; }
   .progress-round { margin-bottom: 16px; }
   .progress-round-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -459,14 +470,20 @@
   <!-- ===================== RESULTS ===================== -->
   <div class="results-section" id="resultsSection">
 
-    <div class="score-banner">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;opacity:0.7;margin-bottom:4px;" id="avgBadge">3-run averaged score</div>
-      <div class="score-pct" id="resultPct">—</div>
-      <div class="score-detail" id="resultRaw">Score: — / —</div>
-      <div class="score-points" id="resultPoints"></div>
-      <div class="run-spread-row" id="runSpreadRow" style="display:none;"></div>
-      <div id="consistencyBadge"></div>
-    </div>
+  <div class="score-banner">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;opacity:0.7;margin-bottom:4px;" id="avgBadge">3-run averaged score</div>
+    <div class="score-pct" id="resultPct">—</div>
+    <div class="score-detail" id="resultRaw">Score: — / —</div>
+    <div class="score-points" id="resultPoints"></div>
+    <div class="run-spread-row" id="runSpreadRow" style="display:none;"></div>
+    <div id="consistencyBadge"></div>
+  </div>
+
+  <!-- Recalculate banner — appears when weights change after grading -->
+  <div id="recalcBanner" style="display:none;background:#fff8f0;border:1px solid #e67e22;border-radius:8px;padding:10px 16px;margin-bottom:12px;display:none;align-items:center;justify-content:space-between;gap:12px;">
+    <span style="font-size:12px;color:#e67e22;font-weight:600;">⚖ Weights changed — scores are stale</span>
+    <button class="btn-recalc" onclick="recalculateWithWeights()">↺ Recalculate scores</button>
+  </div>
 
     <div id="questionResults"></div>
 
@@ -813,6 +830,8 @@ let selectedChips = new Set();
 let priorityChip = null;
 let parsedQuestions = [];
 let rubricSelections = {}; // { questionIndex: Set of factor names }
+let factorWeights    = {}; // { factorName: 1|2|3 } — default 1
+let lastRawRounds    = null; // cache for re-aggregation without regrading
 
 // ============================================================
 // STEP 0: SETTINGS — localStorage persistence
@@ -895,7 +914,8 @@ function saveRubricState() {
   });
   localStorage.setItem('pg_rubricData', JSON.stringify({
     questions:  parsedQuestions,
-    selections: plain
+    selections: plain,
+    weights:    factorWeights
   }));
 }
 
@@ -906,11 +926,14 @@ function loadRubricState() {
   try { saved = JSON.parse(raw); } catch(e) { return; }
   if (!saved || !saved.questions || !saved.questions.length) return;
 
+  // Restore weights first so buildRubric renders them correctly
+  if (saved.weights) factorWeights = saved.weights;
+
   // Restore question text
   document.getElementById('questionsInput').value = saved.questions.join('\n');
 
-  // Build rubric (applies defaults)
-  buildRubric(true); // pass true = silent (no scroll)
+  // Build rubric (applies defaults + weights)
+  buildRubric(true);
 
   // Override checkbox states with saved selections
   Object.keys(saved.selections).forEach(i => {
@@ -919,7 +942,6 @@ function loadRubricState() {
     document.querySelectorAll(`input[data-q="${i}"]`).forEach(cb => {
       cb.checked = savedSet.has(cb.dataset.factor);
     });
-    // Fix Check All / Uncheck All button label
     const allChecked = Array.from(document.querySelectorAll(`input[data-q="${i}"]`)).every(c => c.checked);
     const btn = document.querySelector(`#factors_${i}`)?.closest('.question-block')?.querySelector('.btn-check-all');
     if (btn) btn.textContent = allChecked ? 'Uncheck All' : 'Check All';
@@ -1087,6 +1109,17 @@ function updateRubricSummary() {
   }
 }
 
+function recalculateWithWeights() {
+  if (!lastRawRounds) return;
+  document.getElementById('recalcBanner').style.display = 'none';
+  const pointsPossible = parseFloat(document.getElementById('pointsPossible').value) || null;
+  const aggregated = computeAggregation(lastRawRounds);
+  const finalPoints = pointsPossible
+    ? parseFloat(((aggregated.percentage / 100) * pointsPossible).toFixed(2))
+    : null;
+  renderResults({ ...aggregated, finalPoints }, pointsPossible);
+}
+
 // ============================================================
 // RUBRIC BUILDER
 // ============================================================
@@ -1130,13 +1163,19 @@ function buildRubric(silent = false) {
     const grid = document.getElementById(`factors_${i}`);
     RUBRIC_FACTORS.forEach(factor => {
       const isChecked = !FACTORS_OPT_IN.has(factor.name);
+      const w = factorWeights[factor.name] || 1;
       const item = document.createElement('label');
       item.className = 'factor-item';
       item.innerHTML = `
         <input type="checkbox" data-q="${i}" data-factor="${factor.name}"
           ${isChecked ? 'checked' : ''}
           onchange="toggleFactor(${i},'${factor.name}',this.checked)" />
-        <span class="factor-text"><span class="factor-name">${factor.name}:</span> ${factor.desc}</span>`;
+        <span class="factor-text"><span class="factor-name">${factor.name}:</span> ${factor.desc}</span>
+        <span class="weight-btns" onclick="event.preventDefault()">
+          <button class="wbtn${w===1?' active':''}" data-w="1" onclick="setWeight('${factor.name}',1,this)">1×</button>
+          <button class="wbtn${w===2?' active':''}" data-w="2" onclick="setWeight('${factor.name}',2,this)">2×</button>
+          <button class="wbtn${w===3?' active':''}" data-w="3" onclick="setWeight('${factor.name}',3,this)">3×</button>
+        </span>`;
       grid.appendChild(item);
     });
   });
@@ -1161,6 +1200,19 @@ function toggleFactor(qIndex, factorName, checked) {
   else rubricSelections[qIndex].delete(factorName);
   saveRubricState();
   updateRubricSummary();
+}
+
+function setWeight(factorName, weight, btn) {
+  factorWeights[factorName] = weight;
+  // Update button states for ALL instances of this factor across questions
+  document.querySelectorAll(`.wbtn[onclick*="'${factorName}'"]`).forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.w) === weight);
+  });
+  saveRubricState();
+  // If we have cached rounds, offer to recalculate
+  if (lastRawRounds) {
+    document.getElementById('recalcBanner').style.display = 'block';
+  }
 }
 
 // Check All / Uncheck All toggle button per question
@@ -1487,70 +1539,97 @@ function fetchWithTimeout(url, ms, options = {}) {
 }
 
 // ============================================================
-// aggregateRounds — client-side Monte Carlo aggregation
+// aggregateRounds — client-side Monte Carlo aggregation with factor weights
 // ============================================================
 function aggregateRounds(rounds) {
-  // rounds = [ [q1,q2,q3,q4], [q1,q2,q3,q4], [q1,q2,q3,q4] ]
+  lastRawRounds = rounds; // cache for weight-only recalculation
+  return computeAggregation(rounds);
+}
+
+function computeAggregation(rounds) {
   const numQ = rounds[0].length;
 
-  // Per-round totals and percentages
-  const roundTotals = rounds.map(r =>
-    r.reduce((s, q) => s + (q.questionTotal || 0), 0)
-  );
-  const roundMaxes = rounds.map(r =>
-    r.reduce((s, q) => s + (q.questionMax || 0), 0)
-  );
-  const roundPcts = rounds.map((r, i) =>
-    roundMaxes[i] > 0 ? parseFloat(((roundTotals[i] / roundMaxes[i]) * 100).toFixed(1)) : 0
-  );
-
-  // Identify median run (index of middle score)
-  const sorted = [...roundPcts].sort((a, b) => a - b);
-  const medianPct = sorted[1];
-  const medianRunIdx = roundPcts.indexOf(medianPct);
-
-  // Build aggregated questions
+  // Build aggregated questions with weighted scoring
   const aggregatedQuestions = [];
   for (let qi = 0; qi < numQ; qi++) {
     const qResults = rounds.map(r => r[qi]);
-    const factors = qResults[0].factors || [];
+    const factors  = qResults[0].factors || [];
 
     const avgFactors = factors.map(f => {
+      const w = factorWeights[f.factorName] || 1;
       const fScores = qResults.map(r => {
         const found = (r.factors || []).find(x => x.factorName === f.factorName);
         return found ? (found.score || 0) : 0;
       });
-      const avg = fScores.reduce((s, x) => s + x, 0) / fScores.length;
+      const avg    = fScores.reduce((s, x) => s + x, 0) / fScores.length;
       const spread = Math.max(...fScores) - Math.min(...fScores);
-      const medianF = (qResults[medianRunIdx].factors || []).find(x => x.factorName === f.factorName);
+      const medianF = null; // resolved after median run is known
       return {
-        factorName:   f.factorName,
-        evidence:     medianF?.evidence     || 'No evidence found',
-        score:        parseFloat(avg.toFixed(2)),
-        justification: medianF?.justification || '',
+        factorName:    f.factorName,
+        weight:        w,
+        evidence:      (qResults[0].factors || []).find(x => x.factorName === f.factorName)?.evidence || 'No evidence found',
+        score:         parseFloat(avg.toFixed(2)),
         scoreVariance: parseFloat(spread.toFixed(2)),
-        runScores:    fScores
+        runScores:     fScores,
+        justification: ''  // filled from median run below
       };
     });
 
-    const qTotal = avgFactors.reduce((s, f) => s + f.score, 0);
-    const qMax   = avgFactors.length; // 1.0 max per factor
-    const qPct   = qMax > 0 ? parseFloat(((qTotal / qMax) * 100).toFixed(1)) : 0;
-    const qRunTotals = rounds.map(r => (r[qi].questionTotal || 0));
-    const qSpread = parseFloat((Math.max(...qRunTotals) - Math.min(...qRunTotals)).toFixed(2));
+    // Weighted totals per round for percentage calculation
+    const qRunWeightedTotals = rounds.map(r => {
+      const qr = r[qi];
+      return (qr.factors || []).reduce((s, f) => {
+        const w = factorWeights[f.factorName] || 1;
+        return s + (f.score || 0) * w;
+      }, 0);
+    });
+    const qWeightMax = avgFactors.reduce((s, f) => s + (factorWeights[f.factorName] || 1), 0);
+
+    const qTotal = avgFactors.reduce((s, f) => s + f.score * (factorWeights[f.factorName] || 1), 0);
+    const qPct   = qWeightMax > 0 ? parseFloat(((qTotal / qWeightMax) * 100).toFixed(1)) : 0;
+    const qSpread = parseFloat((Math.max(...qRunWeightedTotals) - Math.min(...qRunWeightedTotals)).toFixed(2));
 
     aggregatedQuestions.push({
       questionNumber: qi + 1,
       questionText:   qResults[0].questionText || '',
       factors:        avgFactors,
       questionTotal:  parseFloat(qTotal.toFixed(2)),
-      questionMax:    parseFloat(qMax.toFixed(2)),
+      questionMax:    parseFloat(qWeightMax.toFixed(2)),
       questionPct:    qPct,
       questionSpread: qSpread,
-      critique:       qResults[medianRunIdx].critique || '',
-      runTotals:      qRunTotals
+      _qResults:      qResults  // stored for median run critique
     });
   }
+
+  // Per-round weighted totals and percentages
+  const roundTotals = rounds.map((r, ri) => {
+    return r.reduce((s, q) => {
+      return s + (q.factors || []).reduce((sf, f) => sf + (f.score || 0) * (factorWeights[f.factorName] || 1), 0);
+    }, 0);
+  });
+  const roundMaxTotal = aggregatedQuestions.reduce((s, q) => s + q.questionMax, 0);
+  const roundPcts = roundTotals.map(t =>
+    roundMaxTotal > 0 ? parseFloat(((t / roundMaxTotal) * 100).toFixed(1)) : 0
+  );
+
+  // Identify median run
+  const sorted      = [...roundPcts].sort((a, b) => a - b);
+  const medianPct   = sorted[1];
+  const medianRunIdx = roundPcts.indexOf(medianPct);
+
+  // Fill in median run evidence + justification + critique
+  aggregatedQuestions.forEach(q => {
+    const medianQResult = q._qResults[medianRunIdx];
+    q.factors.forEach(f => {
+      const mf = (medianQResult?.factors || []).find(x => x.factorName === f.factorName);
+      if (mf) {
+        f.evidence      = mf.evidence      || f.evidence;
+        f.justification = mf.justification || '';
+      }
+    });
+    q.critique = medianQResult?.critique || '';
+    delete q._qResults;
+  });
 
   const totalScore    = aggregatedQuestions.reduce((s, q) => s + q.questionTotal, 0);
   const totalPossible = aggregatedQuestions.reduce((s, q) => s + q.questionMax,   0);
@@ -1558,9 +1637,9 @@ function aggregateRounds(rounds) {
   const spread        = parseFloat((Math.max(...roundPcts) - Math.min(...roundPcts)).toFixed(1));
 
   return {
-    questions:      aggregatedQuestions,
-    totalScore:     parseFloat(totalScore.toFixed(2)),
-    totalPossible:  parseFloat(totalPossible.toFixed(2)),
+    questions:     aggregatedQuestions,
+    totalScore:    parseFloat(totalScore.toFixed(2)),
+    totalPossible: parseFloat(totalPossible.toFixed(2)),
     percentage,
     roundPcts,
     medianRunIdx,
@@ -1633,6 +1712,7 @@ function renderResults(result, pointsPossible) {
 
     (q.factors || []).forEach(f => {
       const s = f.score;
+      const w = f.weight || factorWeights[f.factorName] || 1;
       const scoreClass = s === 0 ? 's0' : s <= 0.25 ? 's25' : s <= 0.5 ? 's50' : s <= 0.75 ? 's75' : 's100';
       const row = document.createElement('div');
       row.className = 'factor-result';
@@ -1642,11 +1722,14 @@ function renderResults(result, pointsPossible) {
       const varianceHtml = (f.scoreVariance || 0) > 0
         ? `<div class="factor-variance">Run scores: ${(f.runScores || []).join(' / ')} (variance ±${f.scoreVariance})</div>`
         : '';
+      const weightBadge = w > 1
+        ? `<span style="font-size:9px;font-weight:700;background:${w===3?'#fde8e8':'#fff8f0'};color:${w===3?'#c0392b':'#e67e22'};padding:1px 6px;border-radius:4px;margin-left:4px;">${w}×</span>`
+        : '';
       row.innerHTML = `
         <div class="fr-score ${scoreClass}">${s.toFixed(2)}</div>
         <div style="flex:1;">
           <div style="display:flex;gap:10px;align-items:flex-start;">
-            <div class="fr-name" style="flex:1;">${f.factorName}</div>
+            <div class="fr-name" style="flex:1;">${f.factorName}${weightBadge}</div>
             <div class="fr-just" style="flex:2;">${f.justification}</div>
           </div>
           ${evidenceHtml}${varianceHtml}
