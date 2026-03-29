@@ -30,8 +30,9 @@ app.get('/health', (req, res) => {
 
 // ============================================================
 // /grade-round
-// Runs ONE round: one Claude call per question, all in parallel.
-// Returns array of per-question results.
+// ONE Claude call grades ALL questions in a single round.
+// Frameworks + case + paper sent once (not 4× like per-question approach).
+// Token cost: ~10,000/round vs ~36,000/round — 3 rounds easily within limits.
 // Called 3 times by the client for Monte Carlo averaging.
 // ============================================================
 app.post('/grade-round', async (req, res) => {
@@ -45,52 +46,28 @@ app.post('/grade-round', async (req, res) => {
 
     const scores = adjustedScores || { absent:0, incomplete:0.25, partial:0.50, strong:0.75, mastery:1.0 };
 
-    // Sequential question calls — one at a time, fully rate-limit safe.
-    // Haiku processes each in ~12-15s. 4 questions ≈ 50-60s per round.
-    // No parallelism = no token burst = no 500 errors regardless of org tier.
-    const rawResults = [];
-    for (let i = 0; i < questions.length; i++) {
-      const text = await callClaudeWithTimeout(
-        buildQuestionPrompt(
-          chipContexts, priorityChipName, questions[i],
-          rubricSelections[i] || [], caseText, studentPaperText,
-          harshness, scores, blindGrade, i + 1
-        ),
-        3500,
-        90000,
-        'claude-haiku-4-5-20251001'
-      );
-      rawResults.push(text);
-    }
+    // Single call grades all questions — token-efficient, no rate limit issues
+    const rawText = await callClaudeWithTimeout(
+      buildRoundPrompt(
+        chipContexts, priorityChipName, questions, rubricSelections,
+        caseText, studentPaperText, harshness, scores, blindGrade
+      ),
+      8000,    // all questions in one response
+      120000,  // 2-minute timeout
+      'claude-opus-4-5'  // Opus: better multi-question reasoning; ~10k tokens/round is fine
+    );
 
-    // Parse each question JSON
-    const questionResults = rawResults.map((text, i) => {
-      try {
-        const match = text.match(/\{[\s\S]*\}/);
-        if (!match) throw new Error('No JSON block found in response');
-        const parsed = JSON.parse(match[0]);
-        parsed.questionNumber = i + 1;
-        // Ensure questionMax matches factor count
-        if (!parsed.questionMax || parsed.questionMax === 0) {
-          parsed.questionMax = (rubricSelections[i] || []).length;
-        }
-        return parsed;
-      } catch (err) {
-        console.error(`Q${i+1} parse error:`, err.message);
-        // Return safe fallback so one failure doesn't kill the round
-        return {
-          questionNumber: i + 1,
-          questionText: questions[i],
-          factors: (rubricSelections[i] || []).map(f => ({
-            factorName: f, evidence: 'Parse error', score: 0,
-            justification: 'Could not parse response for this question.'
-          })),
-          questionTotal: 0,
-          questionMax: (rubricSelections[i] || []).length,
-          critique: 'Could not generate critique — see error log.',
-          parseError: err.message
-        };
+    // Parse the questions array from Claude's response
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in round response');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    const questionResults = (parsed.questions || []).map((q, i) => {
+      q.questionNumber = i + 1;
+      if (!q.questionMax || q.questionMax === 0) {
+        q.questionMax = (rubricSelections[i] || []).length;
       }
+      return q;
     });
 
     res.json({ success: true, questions: questionResults });
@@ -383,9 +360,92 @@ PEER AND TEAM EVALUATION:
 
 
 // ============================================================
-// buildQuestionPrompt — focused single-question grading prompt
-// Deliberately omits llmInteractions entirely.
-// Smaller context = less variance, more focused evidence search.
+// buildRoundPrompt — grades ALL questions in ONE call
+// Frameworks + case + paper sent once. Token-efficient.
+// ============================================================
+function buildRoundPrompt(chipContexts, priorityChipName, questions, rubricSelections, caseText, studentPaperText, harshness, scores, blindGrade) {
+
+  let frameworkSection = '';
+  chipContexts.forEach(chip => {
+    const isPriority = chip.name === priorityChipName;
+    frameworkSection += `\n\n=== ${isPriority ? 'PRIORITY FRAMEWORK (weight most heavily)' : 'Supporting Framework'}: ${chip.name} ===\n${chip.content}`;
+  });
+
+  let questionsSection = '';
+  questions.forEach((q, i) => {
+    const factors = rubricSelections[i] || [];
+    questionsSection += `\nQUESTION ${i + 1}: ${q}\nRubric factors to score:\n`;
+    factors.forEach(f => { questionsSection += `  - ${f}\n`; });
+  });
+
+  const blindNote = blindGrade ? '\nNOTE: BLIND GRADE SESSION. Grade the work only — no team identity provided.\n' : '';
+
+  return `You are an expert Innovation professor grading a student group paper.
+${blindNote}
+
+=== GRADING FRAMEWORKS ===
+PRIORITY framework carries the most weight.
+${frameworkSection}
+
+
+=== CASE STUDY TEXT ===
+${caseText || '[No case text provided]'}
+
+
+=== STUDENT PAPER ===
+${studentPaperText || '[No student paper provided]'}
+
+
+=== QUESTIONS AND RUBRIC FACTORS ===
+Grade ONLY the listed factors per question.
+${questionsSection}
+
+
+=== GRADING SCALE (Harshness: ${harshness || 100}%) ===
+  Absent:      ${scores.absent}
+  Incomplete:  ${scores.incomplete}
+  Partial:     ${scores.partial}
+  Strong:      ${scores.strong}
+  Mastery:     ${scores.mastery}
+
+Use ONLY these exact values.
+
+
+${buildBehavioralAnchors(scores)}
+
+
+=== TWO-PASS GRADING ===
+PASS 1 — FIND EVIDENCE: For every factor in every question, locate the exact sentence or phrase in the student paper. If nothing exists write "No evidence found." Grade only what is written.
+PASS 2 — SCORE: Using only Pass 1 evidence, assign a score from the behavioral anchors.
+
+
+=== OUTPUT — CRITICAL ===
+Return ONLY valid JSON. No markdown. No text outside the JSON.
+
+{
+  "questions": [
+    {
+      "questionNumber": 1,
+      "questionText": "full question text",
+      "factors": [
+        {
+          "factorName": "exact factor name",
+          "evidence": "exact phrase from student paper, or No evidence found",
+          "score": ${scores.strong},
+          "justification": "one sentence tying evidence to behavioral anchor"
+        }
+      ],
+      "questionTotal": 2.25,
+      "questionMax": 3.0,
+      "critique": "exactly 50 words grounded in selected frameworks"
+    }
+  ]
+}`;
+}
+
+
+// ============================================================
+// buildQuestionPrompt — focused single-question prompt (kept for reference)
 // ============================================================
 function buildQuestionPrompt(chipContexts, priorityChipName, question, factors, caseText, studentPaperText, harshness, scores, blindGrade, questionNumber) {
 
