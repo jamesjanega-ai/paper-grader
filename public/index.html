@@ -176,6 +176,20 @@
   .watchfor-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #e67e22; margin-bottom: 6px; }
   .one-sentence-box { background: #f5f5f5; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #555; font-style: italic; border-left: 3px solid #bbb; }
 
+  /* NAV RIBBON */
+  .nav-ribbon { background: #1a1a2e; color: #fff; padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
+  .nav-ribbon-title { font-size: 14px; font-weight: 600; color: #fff; text-decoration: none; }
+  .nav-ribbon-links { display: flex; gap: 6px; }
+  .nav-ribbon-link { padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s; }
+  .nav-ribbon-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .nav-ribbon-link.active { background: #4a6cf7; color: #fff; border-color: #4a6cf7; }
+
+  /* STEP 3 COLLAPSE */
+  .collapsible-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+  .collapsible-header:hover .collapse-toggle { color: #4a6cf7; }
+  .collapse-toggle { font-size: 12px; font-weight: 600; color: #888; background: #f0f0f0; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer; flex-shrink: 0; }
+  .collapse-summary { font-size: 12px; color: #27ae60; font-weight: 600; margin-top: 4px; }
+
   /* PROGRESS BOARD */
   .progress-board { padding: 20px; }
   .progress-round { margin-bottom: 16px; }
@@ -227,9 +241,16 @@
 </head>
 <body>
 
+<div class="nav-ribbon">
+  <a href="/" class="nav-ribbon-title">📋 Innovation Paper Grader</a>
+  <div class="nav-ribbon-links">
+    <a href="/" class="nav-ribbon-link active">Grader</a>
+    <a href="/dashboard.html" class="nav-ribbon-link">📊 Dashboard</a>
+  </div>
+</div>
+
 <div class="container">
-  <h1>📋 Innovation Paper Grader</h1>
-  <p class="subtitle">Select your grading frameworks, build a rubric, drop in the papers, and let Claude grade.</p>
+  <p class="subtitle" style="margin-bottom:20px;">Select your grading frameworks, build a rubric, drop in the papers, and let Claude grade.</p>
 
   <!-- ===================== SECTION 0: SESSION SETTINGS ===================== -->
   <div class="section">
@@ -322,9 +343,15 @@
 
   <!-- ===================== SECTION 3: RUBRIC BUILDER ===================== -->
   <div class="section" id="rubricSection" style="display:none;">
-    <div class="section-title">Step 3 — Select Applicable Factors Per Question</div>
-    <div class="section-hint">For each question, check the factors that apply. Only checked factors will be graded.</div>
-    <div id="rubricBuilder"></div>
+    <div class="collapsible-header" onclick="toggleRubricCollapse()">
+      <div>
+        <div class="section-title">Step 3 — Select Applicable Factors Per Question</div>
+        <div class="section-hint" style="margin-bottom:0;">For each question, check the factors that apply. Only checked factors will be graded.</div>
+        <div class="collapse-summary" id="rubricSummary"></div>
+      </div>
+      <button class="collapse-toggle" id="rubricCollapseBtn">Show ▾</button>
+    </div>
+    <div id="rubricBuilder" style="margin-top:14px;"></div>
   </div>
 
   <!-- ===================== SECTION 4: DROP ZONES ===================== -->
@@ -1030,6 +1057,37 @@ function renderPriorityRow() {
 }
 
 // ============================================================
+// STEP 3 COLLAPSE
+// ============================================================
+let rubricCollapsed = false;
+
+function toggleRubricCollapse() {
+  rubricCollapsed = !rubricCollapsed;
+  applyRubricCollapse();
+}
+
+function applyRubricCollapse() {
+  const builder = document.getElementById('rubricBuilder');
+  const btn     = document.getElementById('rubricCollapseBtn');
+  if (!builder || !btn) return;
+  builder.style.display = rubricCollapsed ? 'none' : 'block';
+  btn.textContent = rubricCollapsed ? 'Edit ▸' : 'Collapse ▴';
+  updateRubricSummary();
+}
+
+function updateRubricSummary() {
+  const summary = document.getElementById('rubricSummary');
+  if (!summary) return;
+  const qCount = parsedQuestions.length;
+  const totalFactors = Object.values(rubricSelections).reduce((s, set) => s + set.size, 0);
+  if (qCount > 0 && totalFactors > 0) {
+    summary.textContent = `${qCount} question${qCount!==1?'s':''} · ${totalFactors} factor${totalFactors!==1?'s':''} selected`;
+  } else {
+    summary.textContent = '';
+  }
+}
+
+// ============================================================
 // RUBRIC BUILDER
 // ============================================================
 
@@ -1084,7 +1142,15 @@ function buildRubric(silent = false) {
   });
 
   document.getElementById('rubricSection').style.display = 'block';
-  if (!silent) document.getElementById('rubricSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!silent) {
+    rubricCollapsed = false;
+    applyRubricCollapse();
+    document.getElementById('rubricSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    // Auto-collapse when restoring from saved state — Step 4 is more immediately relevant
+    rubricCollapsed = true;
+    applyRubricCollapse();
+  }
 
   saveQuestionsState();
   saveRubricState();
@@ -1093,7 +1159,8 @@ function buildRubric(silent = false) {
 function toggleFactor(qIndex, factorName, checked) {
   if (checked) rubricSelections[qIndex].add(factorName);
   else rubricSelections[qIndex].delete(factorName);
-  saveRubricState(); // persist
+  saveRubricState();
+  updateRubricSummary();
 }
 
 // Check All / Uncheck All toggle button per question
