@@ -1058,14 +1058,7 @@ function renderSessionTable() {
   `).join('')||'<tr><td colspan="11" style="text-align:center;color:#aaa;padding:20px;">No sessions yet.</td></tr>';
 }
 
-// ════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', loadData);
-</script>
-</body>
-</html>
-
+// (model health functions continue below)
 
 function renderModelCards() {
   const rows = allRows.filter(r => r.spread !== null);
