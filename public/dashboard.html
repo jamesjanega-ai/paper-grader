@@ -244,6 +244,13 @@ table.timeline tr:hover td { background: #fafbff; }
     <div class="loading"><div class="loading-ring"></div>Loading…</div>
   </div>
 
+  <!-- Diagnostic status — shows loading/error/empty state, hides when charts render -->
+  <div id="modelStatus" style="text-align:center;padding:40px;color:#888;font-size:13px;">
+    <div class="loading-ring" style="margin:0 auto 12px;"></div>
+    <p>Loading grading history…</p>
+    <p style="margin-top:8px;font-size:12px;color:#aaa;">If this persists, click Student Performance to check for a data error, then ↻ Refresh.</p>
+  </div>
+
   <!-- Full width: Score trend over time -->
   <div class="chart-box" style="margin-bottom:20px;">
     <div class="chart-title">Score Trend Over Time</div>
@@ -376,8 +383,12 @@ async function loadData() {
     applyFilters();      // renders Student Performance tab
     renderModelTab();    // also render Model Health so it's ready when user clicks it
   } catch (err) {
+    const errMsg = `Data load failed: ${err.message}`;
     document.getElementById('perfCards').innerHTML =
-      `<div class="empty-state"><p style="color:#c0392b;">Failed to load data: ${err.message}</p><p>Make sure your Apps Script is deployed with the doGet handler.</p></div>`;
+      `<div class="empty-state"><p style="color:#c0392b;">${errMsg}</p><p>Make sure your Apps Script is deployed with the doGet handler and your Render server has the latest server.js.</p></div>`;
+    // Also surface the error on Model Health tab so it's visible regardless of which tab is active
+    const ms = document.getElementById('modelStatus');
+    if (ms) ms.innerHTML = `<p style="color:#c0392b;font-weight:600;">${errMsg}</p><p style="margin-top:8px;font-size:12px;">Check: (1) Apps Script deployed with doGet? (2) Render server.js updated? (3) GOOGLE_SCRIPT_URL set in Render env vars?</p>`;
     console.error(err);
   }
 }
@@ -887,7 +898,20 @@ async function analyzeThemes() {
 // MODEL HEALTH TAB
 // ════════════════════════════════════════
 function renderModelTab() {
-  if (!allRows.length) return;
+  const status = document.getElementById('modelStatus');
+  if (!allRows.length) {
+    if (status) status.innerHTML = `
+      <p style="color:#e67e22;font-weight:600;">No grading data found.</p>
+      <p style="margin-top:8px;font-size:12px;">Possible causes:<br>
+      • Apps Script <code>doGet</code> handler not yet deployed (paste new apps-script.gs and deploy new version)<br>
+      • Render server not updated (push latest server.js to GitHub)<br>
+      • <code>GOOGLE_SCRIPT_URL</code> env var missing on Render<br>
+      • Google Sheet has no rows yet</p>
+      <button onclick="loadData()" style="margin-top:12px;padding:6px 16px;background:#4a6cf7;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">↻ Try again</button>`;
+    return;
+  }
+  // Data loaded — hide diagnostic, show charts
+  if (status) status.style.display = 'none';
   renderModelCards();
   renderScoreTrendChart();
   renderSpreadChart();
