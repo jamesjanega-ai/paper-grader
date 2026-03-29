@@ -151,8 +151,11 @@ table.timeline tr:hover td { background: #fafbff; }
   <!-- Heat map -->
   <div class="section">
     <div class="section-title">Team Score Heat Map</div>
-    <div class="section-sub">Scores by question. Green = strong · Red = weak · Avg row shows cohort mean per question.</div>
-    <div class="heatmap-wrap" id="heatmapWrap">
+    <div class="section-sub" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Scores by question. Green = strong · Red = weak · Avg row shows cohort mean per question.</span>
+      <button class="btn-secondary" id="toggleQBtn" onclick="toggleExtendedQ()" style="font-size:11px;padding:4px 12px;flex-shrink:0;margin-left:12px;">Show Q6–Q10 ▾</button>
+    </div>
+    <div class="heatmap-wrap" id="heatmapWrap" style="margin-top:12px;">
       <div class="loading"><div class="loading-ring"></div>Loading…</div>
     </div>
   </div>
@@ -313,7 +316,17 @@ async function loadData() {
 }
 
 function parseRow(r) {
-  const pct = v => { const n = parseFloat(String(v||'').replace('%','')); return isNaN(n) ? null : n; };
+  // Google Sheets returns %-formatted cells as decimals (0.6565 = 65.65%).
+  // Text cells stored as "65.65%" come back as strings. Handle both.
+  const pct = v => {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number') {
+      // Decimal from a Sheets % cell: 0.6565 → 65.65
+      return v < 1.5 ? Math.round(v * 10000) / 100 : Math.round(v * 100) / 100;
+    }
+    const n = parseFloat(String(v).replace('%', '').trim());
+    return isNaN(n) ? null : n;
+  };
   const ts = r['Timestamp'];
   const date = ts ? new Date(ts) : null;
 
@@ -397,12 +410,13 @@ function renderPerfCards() {
   const maxF = Math.max(...finals);
   const avgHarsh = avg(rows.map(r => r.harshness).filter(v => v !== null));
   const sections = [...new Set(rows.map(r => r.section).filter(Boolean))];
+  const classGap = finals.length > 1 ? (maxF - minF) : null;
 
   document.getElementById('perfCards').innerHTML = `
     <div class="card blue"><div class="card-label">Teams graded</div><div class="card-value">${rows.length}</div><div class="card-sub">${sections.length} section${sections.length!==1?'s':''}</div></div>
-    <div class="card green"><div class="card-label">Avg final score</div><div class="card-value">${avgFinal!==null?avgFinal.toFixed(1)+'%':'—'}</div><div class="card-sub">Range ${minF.toFixed(0)}–${maxF.toFixed(0)}%</div></div>
+    <div class="card green"><div class="card-label">Avg final score</div><div class="card-value">${avgFinal!==null?avgFinal.toFixed(1)+'%':'—'}</div><div class="card-sub">Range ${finals.length?minF.toFixed(0)+'–'+maxF.toFixed(0)+'%':'—'}</div></div>
     <div class="card amber"><div class="card-label">Avg harshness</div><div class="card-value">${avgHarsh!==null?avgHarsh.toFixed(0)+'%':'—'}</div><div class="card-sub">Grading calibration</div></div>
-    <div class="card coral"><div class="card-label">Score spread</div><div class="card-value">${(maxF-minF).toFixed(1)}pts</div><div class="card-sub">Top–bottom gap</div></div>
+    <div class="card coral"><div class="card-label">Class score gap</div><div class="card-value">${classGap!==null?classGap.toFixed(1)+'pts':'—'}</div><div class="card-sub">Top team minus bottom team</div></div>
   `;
 }
 
@@ -418,6 +432,14 @@ function scoreColor(pct) {
   }
 }
 
+let showExtendedQ = false;
+
+function toggleExtendedQ() {
+  showExtendedQ = !showExtendedQ;
+  document.getElementById('toggleQBtn').textContent = showExtendedQ ? 'Hide Q6–Q10 ▴' : 'Show Q6–Q10 ▾';
+  renderHeatMap();
+}
+
 function renderHeatMap() {
   const rows = filteredRows;
   const wrap = document.getElementById('heatmapWrap');
@@ -428,43 +450,46 @@ function renderHeatMap() {
   rows.forEach(r => r.qs.forEach((v, i) => { if (v !== null) maxQ = Math.max(maxQ, i + 1); }));
   if (!maxQ) maxQ = 4;
 
-  const qCols = Array.from({length: maxQ}, (_, i) => i);
+  // Q1-Q5 always shown; Q6-Q10 shown only if toggled AND data exists
+  const baseQ  = Math.min(maxQ, 5);
+  const extQ   = showExtendedQ ? maxQ : baseQ;
+  const qCols  = Array.from({length: extQ}, (_, i) => i);
   const avgRow = qCols.map(i => avg(rows.map(r => r.qs[i])));
-  const teamAvg = r => avg(r.qs.slice(0, maxQ));
 
-  // Sort teams by avg score descending
-  const sorted = [...rows].sort((a, b) => (teamAvg(b)||0) - (teamAvg(a)||0));
+  // Sort teams by final score descending
+  const sorted = [...rows].sort((a, b) => (b.finalPct||0) - (a.finalPct||0));
 
   let html = `<table class="heatmap"><thead><tr>
     <th class="team-col">Team</th>
     ${qCols.map(i => `<th>Q${i+1}</th>`).join('')}
-    <th>Final %</th>
+    <th style="border-left:2px solid #ccc;">Final %</th>
   </tr></thead><tbody>`;
 
   sorted.forEach(r => {
-    const rowAvg = r.finalPct;
-    const bg = scoreColor(rowAvg);
+    const bg = scoreColor(r.finalPct);
+    const fg = r.finalPct !== null && r.finalPct < 55 ? '#fff' : '#333';
     html += `<tr>
       <td class="team-cell">${r.team || '—'}<br><span style="font-size:10px;color:#aaa;">${r.section||''} ${r.year||''}</span></td>
       ${qCols.map(i => {
         const v = r.qs[i];
         const bg2 = scoreColor(v);
-        const fg = v !== null && v < 55 ? '#fff' : '#333';
-        return `<td style="background:${bg2};color:${fg};">${v !== null ? v.toFixed(0)+'%' : '—'}</td>`;
+        const fg2 = v !== null && v < 55 ? '#fff' : '#333';
+        return `<td style="background:${bg2};color:${fg2};">${v !== null ? v.toFixed(0)+'%' : '—'}</td>`;
       }).join('')}
-      <td style="background:${bg};color:${rowAvg!==null&&rowAvg<55?'#fff':'#333'};font-weight:700;">${rowAvg!==null?rowAvg.toFixed(1)+'%':'—'}</td>
+      <td style="background:${bg};color:${fg};font-weight:700;border-left:2px solid #ccc;">${r.finalPct!==null?r.finalPct.toFixed(1)+'%':'—'}</td>
     </tr>`;
   });
 
-  // Average row
+  // Cohort average row
+  const cohortFinal = avg(rows.map(r => r.finalPct).filter(v => v!==null));
   html += `<tr class="avg-row">
     <td class="team-cell" style="font-weight:700;color:#4a6cf7;">Cohort avg</td>
     ${avgRow.map(v => {
       const bg2 = scoreColor(v);
-      const fg = v !== null && v < 55 ? '#fff' : '#333';
-      return `<td style="background:${bg2};color:${fg};">${v!==null?v.toFixed(0)+'%':'—'}</td>`;
+      const fg2 = v !== null && v < 55 ? '#fff' : '#333';
+      return `<td style="background:${bg2};color:${fg2};">${v!==null?v.toFixed(0)+'%':'—'}</td>`;
     }).join('')}
-    <td style="font-weight:700;color:#4a6cf7;">${avg(rows.map(r=>r.finalPct))?.toFixed(1)+'%'||'—'}</td>
+    <td style="font-weight:700;color:#4a6cf7;border-left:2px solid #ccc;">${cohortFinal!==null?cohortFinal.toFixed(1)+'%':'—'}</td>
   </tr></tbody></table>`;
 
   wrap.innerHTML = html;
@@ -619,17 +644,18 @@ function renderModelTab() {
 
 function renderModelCards() {
   const rows = allRows.filter(r => r.spread !== null);
-  if (!rows.length) { document.getElementById('modelCards').innerHTML = '<div class="empty-state"><p>No model data yet.</p></div>'; return; }
-  const avgSpread = avg(rows.map(r => r.spread));
+  if (!rows.length) { document.getElementById('modelCards').innerHTML = '<div class="empty-state"><p>No model data yet. Grade some papers first.</p></div>'; return; }
+  const spreadVals = rows.map(r => r.spread).filter(v => v !== null);
+  const avgSpread = avg(spreadVals);
   const highCons = rows.filter(r => r.consistency === 'High').length;
   const varCons  = rows.filter(r => r.consistency === 'Variable').length;
   const pctHigh  = rows.length ? ((highCons / rows.length) * 100).toFixed(0) : 0;
-  const avgFinal = avg(allRows.map(r => r.finalPct).filter(v => v!==null));
+
   document.getElementById('modelCards').innerHTML = `
     <div class="card blue"><div class="card-label">Total sessions</div><div class="card-value">${allRows.length}</div><div class="card-sub">All time</div></div>
-    <div class="card green"><div class="card-label">High consistency</div><div class="card-value">${pctHigh}%</div><div class="card-sub">${highCons} of ${rows.length} sessions</div></div>
-    <div class="card amber"><div class="card-label">Avg spread</div><div class="card-value">${avgSpread!==null?avgSpread.toFixed(1):'—'}pts</div><div class="card-sub">Monte Carlo range</div></div>
-    <div class="card coral"><div class="card-label">Variable sessions</div><div class="card-value">${varCons}</div><div class="card-sub">Need human review</div></div>
+    <div class="card green"><div class="card-label">High consistency</div><div class="card-value">${pctHigh}%</div><div class="card-sub">${highCons} of ${rows.length} graded</div></div>
+    <div class="card amber"><div class="card-label">Avg Monte Carlo spread</div><div class="card-value">${avgSpread!==null?avgSpread.toFixed(1)+'%':'—'}</div><div class="card-sub">Run max − run min, per team</div></div>
+    <div class="card coral"><div class="card-label">Variable sessions</div><div class="card-value">${varCons}</div><div class="card-sub">Spread &gt;5% · flag for review</div></div>
   `;
 }
 
