@@ -46,15 +46,15 @@ app.post('/grade-round', async (req, res) => {
 
     const scores = adjustedScores || { absent:0, incomplete:0.25, partial:0.50, strong:0.75, mastery:1.0 };
 
-    // Single call grades all questions — token-efficient, no rate limit issues
-    const rawText = await callClaudeWithTimeout(
+    // GPT-4o mini: ~100x cheaper than Opus, excellent at structured JSON scoring.
+    // Behavioral anchors + temperature=0 ensure consistent rule-following.
+    const rawText = await callOpenAIWithTimeout(
       buildRoundPrompt(
         chipContexts, priorityChipName, questions, rubricSelections,
         caseText, studentPaperText, harshness, scores, blindGrade
       ),
       8000,    // all questions in one response
-      120000,  // 2-minute timeout
-      'claude-opus-4-5'  // Opus: better multi-question reasoning; ~10k tokens/round is fine
+      120000   // 2-minute timeout
     );
 
     // Parse the questions array from Claude's response
@@ -144,7 +144,42 @@ app.post('/grade-synthesize', async (req, res) => {
 
 
 // ============================================================
-// callClaudeWithTimeout — shared API call with abort controller
+// callOpenAIWithTimeout — GPT-4o mini for grading rounds
+// ~100x cheaper than Opus for structured JSON scoring tasks.
+// Synthesis + coaching stay on Claude (narrative quality matters there).
+// ============================================================
+async function callOpenAIWithTimeout(prompt, maxTokens, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model:       'gpt-4o-mini',
+        max_tokens:  maxTokens,
+        temperature: 0,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error('OpenAI API error: ' + (data.error?.message || 'Unknown'));
+    return data.choices[0].message.content;
+
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
+// ============================================================
+// callClaudeWithTimeout — Claude for synthesis + coaching only
 // ============================================================
 async function callClaudeWithTimeout(prompt, maxTokens, timeoutMs, model = 'claude-opus-4-5') {
   const controller = new AbortController();
@@ -414,6 +449,10 @@ Use ONLY these exact values.
 ${buildBehavioralAnchors(scores)}
 
 
+=== IMPORTANT: PROSE VS. STRUCTURED WRITING ===
+Flowing analytical essays and papers with section headers are equally valid. Do NOT penalize papers for lacking headers, and do NOT reward them simply for having them. A well-reasoned argument made across connected paragraphs carries equal weight to the same argument under a section header. Search the full paper for evidence — relevant content may be distributed across paragraphs rather than isolated under a heading.
+
+
 === TWO-PASS GRADING ===
 PASS 1 — FIND EVIDENCE: For every factor in every question, locate the exact sentence or phrase in the student paper. If nothing exists write "No evidence found." Grade only what is written.
 PASS 2 — SCORE: Using only Pass 1 evidence, assign a score from the behavioral anchors.
@@ -600,7 +639,7 @@ async function saveToSheets(data) {
 
     // Consistency rating from spread
     const spreadNum = parseFloat(spread) || 0;
-    const consistency = spreadNum <= 2 ? 'High' : spreadNum <= 5 ? 'Moderate' : 'Variable';
+    const consistency = spreadNum <= 3 ? 'High' : spreadNum <= 7 ? 'Moderate' : 'Variable';
 
     const payload = {
       timestamp:       new Date().toISOString(),
