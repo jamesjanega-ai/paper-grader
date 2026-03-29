@@ -322,8 +322,11 @@ table.timeline tr:hover td { background: #fafbff; }
 // ════════════════════════════════════════
 let allRows        = [];
 let filteredRows   = [];
-let selectedTeams  = new Map();   // teamName → colorIndex (multi-select)
+let selectedTeams  = new Map();
 let nextColorIdx   = 0;
+let gapShowPts     = false;   // toggle between % and raw pts on gap card
+let _gapPct        = null;    // cached gap values for toggle
+let _gapPts        = null;
 const charts       = {};
 
 const TEAM_COLORS = [
@@ -350,7 +353,9 @@ function showTab(id, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
   btn.classList.add('active');
-  renderModelTab();
+  // Only render the tab that was clicked, and only if data is loaded
+  if (id === 'model') renderModelTab();
+  else renderPerfTab();
 }
 
 // ════════════════════════════════════════
@@ -368,7 +373,8 @@ async function loadData() {
       .map(parseRow);
 
     populateFilters();
-    applyFilters();
+    applyFilters();      // renders Student Performance tab
+    renderModelTab();    // also render Model Health so it's ready when user clicks it
   } catch (err) {
     document.getElementById('perfCards').innerHTML =
       `<div class="empty-state"><p style="color:#c0392b;">Failed to load data: ${err.message}</p><p>Make sure your Apps Script is deployed with the doGet handler.</p></div>`;
@@ -469,20 +475,52 @@ function renderPerfCards() {
     document.getElementById('perfCards').innerHTML = '<div class="empty-state"><p>No data for selected filters.</p></div>';
     return;
   }
-  const finals = rows.map(r => r.finalPct).filter(v => v !== null);
-  const avgFinal = avg(finals);
-  const minF = Math.min(...finals);
-  const maxF = Math.max(...finals);
-  const avgHarsh = avg(rows.map(r => r.harshness).filter(v => v !== null));
-  const sections = [...new Set(rows.map(r => r.section).filter(Boolean))];
-  const classGap = finals.length > 1 ? (maxF - minF) : null;
+  const finals    = rows.map(r => r.finalPct).filter(v => v !== null);
+  const avgFinal  = avg(finals);
+  const minF      = Math.min(...finals);
+  const maxF      = Math.max(...finals);
+  const avgHarsh  = avg(rows.map(r => r.harshness).filter(v => v !== null));
+  const sections  = [...new Set(rows.map(r => r.section).filter(Boolean))];
+  const classGap  = finals.length > 1 ? (maxF - minF) : null;
+
+  // Raw points gap: max(pointsEarned) - min(pointsEarned)
+  const earned    = rows.map(r => r.pointsEarned).filter(v => v !== null && v > 0);
+  const ptsGap    = earned.length >= 2 ? Math.max(...earned) - Math.min(...earned) : null;
+
+  // Cache for toggle
+  _gapPct = classGap;
+  _gapPts = ptsGap;
+
+  const gapDisplay = gapShowPts
+    ? (ptsGap !== null ? ptsGap.toFixed(2) + ' pts' : '—')
+    : (classGap !== null ? classGap.toFixed(1) + '%' : '—');
+  const gapSub = gapShowPts
+    ? 'Raw points · click for %'
+    : 'Percentage pts · click for raw pts';
 
   document.getElementById('perfCards').innerHTML = `
     <div class="card blue"><div class="card-label">Teams graded</div><div class="card-value">${rows.length}</div><div class="card-sub">${sections.length} section${sections.length!==1?'s':''}</div></div>
     <div class="card green"><div class="card-label">Avg final score</div><div class="card-value">${avgFinal!==null?avgFinal.toFixed(1)+'%':'—'}</div><div class="card-sub">Range ${finals.length?minF.toFixed(0)+'–'+maxF.toFixed(0)+'%':'—'}</div></div>
     <div class="card amber"><div class="card-label">Avg harshness</div><div class="card-value">${avgHarsh!==null?avgHarsh.toFixed(0)+'%':'—'}</div><div class="card-sub">Grading calibration</div></div>
-    <div class="card coral"><div class="card-label">High–low score gap</div><div class="card-value">${classGap!==null?classGap.toFixed(1)+'%':'—'}</div><div class="card-sub">Best team minus lowest team (filtered)</div></div>
+    <div class="card coral" id="gapCard" onclick="toggleGapUnit()" style="cursor:pointer;user-select:none;" title="Click to toggle % / pts">
+      <div class="card-label">High–low score gap ↕</div>
+      <div class="card-value" id="gapValue">${gapDisplay}</div>
+      <div class="card-sub" id="gapSub">${gapSub}</div>
+    </div>
   `;
+}
+
+function toggleGapUnit() {
+  gapShowPts = !gapShowPts;
+  const valEl = document.getElementById('gapValue');
+  const subEl = document.getElementById('gapSub');
+  if (!valEl) return;
+  valEl.textContent = gapShowPts
+    ? (_gapPts !== null ? _gapPts.toFixed(2) + ' pts' : '—')
+    : (_gapPct !== null ? _gapPct.toFixed(1) + '%' : '—');
+  if (subEl) subEl.textContent = gapShowPts
+    ? 'Raw points · click for %'
+    : 'Percentage pts · click for raw pts';
 }
 
 function scoreColor(pct) {
