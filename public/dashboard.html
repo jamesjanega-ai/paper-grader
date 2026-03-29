@@ -280,7 +280,7 @@ table.timeline tr:hover td { background: #fafbff; }
     <!-- Consistency breakdown (MC sessions only) -->
     <div class="chart-box">
       <div class="chart-title">Consistency Breakdown</div>
-      <div class="chart-sub">Monte Carlo sessions only. High ≤2% · Moderate 2–5% · Variable >5%.</div>
+      <div class="chart-sub">Monte Carlo sessions only. High ≤3% · Moderate 3–7% · Variable >7%.</div>
       <div class="chart-area" style="height:220px;">
         <canvas id="consistencyChart"></canvas>
       </div>
@@ -987,7 +987,7 @@ function renderSpreadChart() {
     document.getElementById('spreadChart').insertAdjacentHTML('afterend','<p style="color:#aaa;font-size:12px;text-align:center;margin-top:8px;">No Monte Carlo sessions yet.</p>');
     return;
   }
-  const colors = rows.map(r => r.spread > 5 ? '#e74c3c' : r.spread > 2 ? '#e67e22' : '#27ae60');
+  const colors = rows.map(r => r.spread > 7 ? '#e74c3c' : r.spread > 3 ? '#e67e22' : '#27ae60');
   charts['spread'] = new Chart(document.getElementById('spreadChart'), {
     type: 'bar',
     data: { labels: rows.map(r=>`${r.team||'?'}`), datasets:[{
