@@ -1603,12 +1603,12 @@ function renderResults(result, pointsPossible) {
   // Consistency badge
   const spread = result.spread || 0;
   const cbEl = document.getElementById('consistencyBadge');
-  if (spread <= 2) {
-    cbEl.innerHTML = `<span class="consistency-badge cb-high">High consistency — spread ±${spread}pts</span>`;
-  } else if (spread <= 5) {
-    cbEl.innerHTML = `<span class="consistency-badge cb-moderate">Moderate — spread ±${spread}pts</span>`;
+  if (spread <= 3) {
+    cbEl.innerHTML = `<span class="consistency-badge cb-high">High consistency — spread ±${spread}%</span>`;
+  } else if (spread <= 7) {
+    cbEl.innerHTML = `<span class="consistency-badge cb-moderate">Moderate — spread ±${spread}%</span>`;
   } else {
-    cbEl.innerHTML = `<span class="consistency-badge cb-variable">Variable — spread ±${spread}pts · review flagged questions</span>`;
+    cbEl.innerHTML = `<span class="consistency-badge cb-variable">Variable — spread ±${spread}% · review flagged questions</span>`;
   }
 
   // Question results
@@ -1620,7 +1620,7 @@ function renderResults(result, pointsPossible) {
     block.className = 'question-result';
     const qPct = q.questionPct || (q.questionMax > 0 ? ((q.questionTotal / q.questionMax) * 100).toFixed(1) : '—');
 
-    const qWarn = (q.questionSpread || 0) > 2
+    const qWarn = (q.questionSpread || 0) > 3
       ? `<div class="variable-warning">Variable across runs — spread ±${q.questionSpread}pts · review evidence below before finalizing</div>`
       : '';
 
