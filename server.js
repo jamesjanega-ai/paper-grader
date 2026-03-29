@@ -640,6 +640,70 @@ async function saveToSheets(data) {
 
 
 // ============================================================
+// /sheet-data — proxy to Google Apps Script (avoids CORS)
+// Dashboard calls this to read all grading history from the Sheet.
+// ============================================================
+app.get('/sheet-data', async (req, res) => {
+  try {
+    if (!process.env.GOOGLE_SCRIPT_URL) {
+      return res.status(500).json({ success: false, error: 'GOOGLE_SCRIPT_URL not configured' });
+    }
+    const response = await fetch(process.env.GOOGLE_SCRIPT_URL, { method: 'GET' });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Sheet data fetch error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// ============================================================
+// /coaching-themes — Claude clusters coaching summaries into themes
+// Called from dashboard "Analyze Themes" button.
+// ============================================================
+app.post('/coaching-themes', async (req, res) => {
+  try {
+    const { coachingTexts } = req.body;
+    if (!coachingTexts || coachingTexts.length === 0) {
+      return res.json({ success: true, themes: [] });
+    }
+    const numbered = coachingTexts.map((t, i) => `${i + 1}. ${t}`).join('\n');
+    const prompt = `You are an educational analyst reviewing how MBA students used AI prompting tools on a business case assignment.
+
+Below are one-sentence coaching summaries about each group's prompting strategy. Identify 3–5 distinct patterns or themes that appear across the group. For each theme, give it a concise name, a one-sentence description, and a count of how many summaries exhibit it.
+
+COACHING SUMMARIES (${coachingTexts.length} groups):
+${numbered}
+
+Return ONLY valid JSON. No markdown. No text outside the JSON.
+
+{
+  "themes": [
+    {
+      "name": "Theme name (3-5 words)",
+      "count": 5,
+      "description": "One sentence describing what this group of students did.",
+      "sentiment": "strength"
+    }
+  ]
+}
+
+Note: sentiment should be "strength", "weakness", or "mixed".`;
+
+    const text = await callClaudeWithTimeout(prompt, 1000, 30000);
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+    const result = JSON.parse(match[0]);
+    res.json({ success: true, themes: result.themes || [] });
+  } catch (err) {
+    console.error('Coaching themes error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// ============================================================
 // Start server
 // ============================================================
 const PORT = process.env.PORT || 3000;
