@@ -394,7 +394,7 @@
     <div class="section-hint">Enter the total points this assignment is worth. Then click Grade Paper.</div>
     <div class="points-row" style="margin-bottom:16px;">
       <label for="pointsPossible">Total Points Possible:</label>
-      <input type="number" id="pointsPossible" value="100" min="1" />
+      <input type="number" id="pointsPossible" value="100" min="1" oninput="savePointsPossible()" />
     </div>
     <div class="error-box" id="errorBox"></div>
     <button class="btn btn-grade" id="gradeBtn" onclick="gradePaper()">⚡ Grade Paper</button>
@@ -910,6 +910,17 @@ function loadSliderState() {
 }
 
 // ============================================================
+// POINTS POSSIBLE PERSISTENCE
+// ============================================================
+function savePointsPossible() {
+  localStorage.setItem('pg_pointsPossible', document.getElementById('pointsPossible').value);
+}
+function loadPointsPossible() {
+  const saved = localStorage.getItem('pg_pointsPossible');
+  if (saved) document.getElementById('pointsPossible').value = saved;
+}
+
+// ============================================================
 // CASE PERSISTENCE — saves case text between sessions
 // ============================================================
 function saveCaseText() {
@@ -947,11 +958,12 @@ function updateCaseBadge(hasCase) {
 // FULL INITIALIZATION — runs once when page loads
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
-  loadSettings();    // Step 0: year/section/case/team/blind
-  loadChipsState();  // Step 1: chips + priority
-  loadSliderState(); // Harshness slider
-  loadRubricState(); // Step 2+3: questions + rubric selections
-  loadCaseText();    // Step 4: case study (persists across sessions)
+  loadSettings();        // Step 0: year/section/case/team/blind
+  loadChipsState();      // Step 1: chips + priority
+  loadSliderState();     // Harshness slider
+  loadRubricState();     // Step 2+3: questions + rubric selections
+  loadCaseText();        // Step 4: case study (persists across sessions)
+  loadPointsPossible();  // Step 5: total points possible
 });
 
 // ============================================================
