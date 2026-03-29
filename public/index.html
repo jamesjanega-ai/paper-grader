@@ -176,7 +176,38 @@
   .watchfor-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #e67e22; margin-bottom: 6px; }
   .one-sentence-box { background: #f5f5f5; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #555; font-style: italic; border-left: 3px solid #bbb; }
 
-  /* BLIND GRADE */
+  /* PROGRESS BOARD */
+  .progress-board { padding: 20px; }
+  .progress-round { margin-bottom: 16px; }
+  .progress-round-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .round-label { font-size: 13px; font-weight: 600; color: var(--color-text-primary, #222); }
+  .round-label.muted { color: #aaa; }
+  .round-score { font-size: 12px; font-weight: 600; color: #27ae60; }
+  .round-status { font-size: 12px; color: #888; }
+  .progress-q-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .progress-q { padding: 6px 4px; border-radius: 6px; text-align: center; font-size: 11px; font-weight: 600; }
+  .pq-done     { background: #e8f5e9; color: #27ae60; }
+  .pq-active   { background: #e8f0fe; color: #4a6cf7; }
+  .pq-waiting  { background: #f4f4f4; color: #aaa; }
+  .coaching-note { margin-top: 14px; padding: 8px 12px; background: #fff8f0; border-radius: 6px; font-size: 11px; color: #e67e22; }
+
+  /* RUN SPREAD + CONSISTENCY */
+  .run-spread-row { display: flex; justify-content: center; gap: 20px; margin-top: 8px; }
+  .run-pill { font-size: 11px; color: rgba(255,255,255,0.75); }
+  .run-pill.median { font-weight: 700; color: #fff; }
+  .consistency-badge { display: inline-block; margin-top: 8px; padding: 3px 12px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .cb-high     { background: rgba(39,174,96,0.25); color: #a8e6c3; }
+  .cb-moderate { background: rgba(230,126,34,0.25); color: #f5c6a0; }
+  .cb-variable { background: rgba(231,76,60,0.25); color: #f5a8a4; }
+
+  /* VARIABLE WARNING */
+  .variable-warning { background: #fde8e8; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 11px; color: #c0392b; }
+
+  /* MEDIAN LABEL */
+  .median-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #4a6cf7; display: block; margin-bottom: 3px; }
+
+  /* FACTOR VARIANCE */
+  .factor-variance { font-size: 10px; color: #e67e22; margin-top: 2px; }
   .blind-grade-row { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: #fff8f0; border: 1px solid #e67e22; border-radius: 8px; cursor: pointer; }
   .blind-grade-row input[type=checkbox] { width: 18px; height: 18px; accent-color: #e67e22; flex-shrink: 0; margin-top: 2px; }
   .blind-blind-label { font-size: 13px; color: #555; line-height: 1.5; }
@@ -358,19 +389,46 @@
     <button class="btn btn-grade" id="gradeBtn" onclick="gradePaper()">⚡ Grade Paper</button>
   </div>
 
-  <!-- ===================== SPINNER ===================== -->
+  <!-- ===================== PROGRESS BOARD ===================== -->
   <div class="spinner" id="spinner">
     <div class="spinner-ring"></div>
-    <div id="spinnerMsg" style="font-size:14px; color:#666;">Claude is grading the paper. This takes about 30–60 seconds…</div>
+    <div id="spinnerMsg" style="font-size:14px;color:#666;margin-bottom:16px;"></div>
+    <div class="progress-board" id="progressBoard" style="display:none; background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.07); text-align:left; max-width:480px; margin:0 auto;">
+      <div class="progress-round" id="pr1">
+        <div class="progress-round-header">
+          <span class="round-label muted" id="rl1">Round 1 of 3</span>
+          <span class="round-status" id="rs1">waiting…</span>
+        </div>
+        <div class="progress-q-grid" id="pq1"></div>
+      </div>
+      <div class="progress-round" id="pr2">
+        <div class="progress-round-header">
+          <span class="round-label muted" id="rl2">Round 2 of 3</span>
+          <span class="round-status" id="rs2">waiting…</span>
+        </div>
+        <div class="progress-q-grid" id="pq2"></div>
+      </div>
+      <div class="progress-round" id="pr3">
+        <div class="progress-round-header">
+          <span class="round-label muted" id="rl3">Round 3 of 3</span>
+          <span class="round-status" id="rs3">waiting…</span>
+        </div>
+        <div class="progress-q-grid" id="pq3"></div>
+      </div>
+      <div class="coaching-note" id="coachingNote" style="display:none;">Coaching call running separately — never sees the paper</div>
+    </div>
   </div>
 
   <!-- ===================== RESULTS ===================== -->
   <div class="results-section" id="resultsSection">
 
     <div class="score-banner">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;opacity:0.7;margin-bottom:4px;" id="avgBadge">3-run averaged score</div>
       <div class="score-pct" id="resultPct">—</div>
       <div class="score-detail" id="resultRaw">Score: — / —</div>
       <div class="score-points" id="resultPoints"></div>
+      <div class="run-spread-row" id="runSpreadRow" style="display:none;"></div>
+      <div id="consistencyBadge"></div>
     </div>
 
     <div id="questionResults"></div>
@@ -1086,7 +1144,7 @@ async function extractDocxText(file) {
 }
 
 // ============================================================
-// GRADE PAPER
+// GRADE PAPER — 3-round Monte Carlo with per-question calls
 // ============================================================
 async function gradePaper() {
   const errorBox = document.getElementById('errorBox');
@@ -1094,112 +1152,280 @@ async function gradePaper() {
   errorBox.textContent = '';
 
   // Validation
-  if (selectedChips.size === 0) {
-    showError('Please select at least one framework chip in Step 1.'); return;
-  }
-  if (!priorityChip) {
-    showError('Please select a Priority Framework in Step 1.'); return;
-  }
-  if (parsedQuestions.length === 0) {
-    showError('Please enter questions and click "Build Rubric" in Step 2.'); return;
-  }
+  if (selectedChips.size === 0) { showError('Please select at least one framework chip in Step 1.'); return; }
+  if (!priorityChip)            { showError('Please select a Priority Framework in Step 1.'); return; }
+  if (parsedQuestions.length === 0) { showError('Please enter questions and click "Build Rubric" in Step 2.'); return; }
   const studentPaper = document.getElementById('studentPaperText').value.trim();
-  if (!studentPaper) {
-    showError('Please add the student paper in Step 4 (drop a PDF or paste text).'); return;
-  }
+  if (!studentPaper)            { showError('Please add the student paper in Step 4.'); return; }
   const anyFactors = Object.values(rubricSelections).some(s => s.size > 0);
-  if (!anyFactors) {
-    showError('Please check at least one rubric factor for at least one question in Step 3.'); return;
-  }
+  if (!anyFactors)              { showError('Please check at least one rubric factor in Step 3.'); return; }
 
-  // Build payload
+  // Build shared payload
   const chipContexts = Array.from(selectedChips).map(key => ({
     name: document.querySelector(`.chip[data-chip="${key}"]`).textContent,
     content: FRAMEWORKS[key]
   }));
   const priorityChipName = document.querySelector(`.chip[data-chip="${priorityChip}"]`).textContent;
   const rubricSelectionsPlain = {};
-  Object.keys(rubricSelections).forEach(i => {
-    rubricSelectionsPlain[i] = Array.from(rubricSelections[i]);
-  });
+  Object.keys(rubricSelections).forEach(i => { rubricSelectionsPlain[i] = Array.from(rubricSelections[i]); });
   const harshness = parseInt(document.getElementById('harshnessSlider').value);
   const adjustedScores = computeAdjustedScores(harshness);
+  const isBlind = document.getElementById('blindGrade').checked;
+  const pointsPossible = parseFloat(document.getElementById('pointsPossible').value) || null;
 
-  const payload = {
-    chipContexts,
-    priorityChipName,
+  const roundPayload = {
+    chipContexts, priorityChipName,
     questions: parsedQuestions,
     rubricSelections: rubricSelectionsPlain,
     caseText: document.getElementById('caseText').value.trim(),
     studentPaperText: studentPaper,
-    llmInteractions: document.getElementById('llmInteractions').value.trim(),
-    pointsPossible: parseFloat(document.getElementById('pointsPossible').value) || null,
-    // Session settings
-    year: document.getElementById('settingYear').value,
-    section: document.getElementById('settingSection').value.trim(),
-    caseName: document.getElementById('settingCase').value.trim(),
-    team: document.getElementById('settingTeam').value.trim(),
-    // Harshness
-    harshness,
-    adjustedScores
+    harshness, adjustedScores, blindGrade: isBlind
   };
 
-  // Disable button and show spinner
+  // Disable button, show progress board
   document.getElementById('gradeBtn').disabled = true;
   document.getElementById('resultsSection').className = 'results-section';
-  showSpinner('Waking up the grading server… (this takes up to 30 seconds on first use)');
+  initProgressBoard(parsedQuestions.length);
 
-  // Blind grade: send real team to Sheets, but flag it so the prompt stays blind
-  const isBlind = document.getElementById('blindGrade').checked;
+  const allRounds = [];
 
   try {
-    try {
-      await fetchWithTimeout(`${BACKEND_URL}/health`, 35000);
-    } catch (wakeErr) {
-      console.warn('Wake-up ping timed out, proceeding anyway:', wakeErr.message);
-    }
+    // Wake up server
+    showSpinner('Waking up grading server…');
+    try { await fetchWithTimeout(`${BACKEND_URL}/health`, 35000); }
+    catch (e) { console.warn('Wake ping timed out, continuing:', e.message); }
 
-    showSpinner('Server is awake. Claude is grading the paper… (30–60 seconds)');
-
-    const response = await fetchWithTimeout(`${BACKEND_URL}/grade`, 120000, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, blindGrade: isBlind })
+    // === ROUND 1 ===
+    setRoundActive(1, parsedQuestions.length);
+    const round1Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 100000, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(roundPayload)
     });
+    const r1 = await round1Data.json();
+    if (!r1.success) throw new Error('Round 1 failed: ' + r1.error);
+    allRounds.push(r1.questions);
+    setRoundComplete(1, r1.questions);
 
-    const data = await response.json();
-    if (!data.success) throw new Error(data.error || 'Grading failed.');
+    // === ROUND 2 ===
+    setRoundActive(2, parsedQuestions.length);
+    const round2Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 100000, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(roundPayload)
+    });
+    const r2 = await round2Data.json();
+    if (!r2.success) throw new Error('Round 2 failed: ' + r2.error);
+    allRounds.push(r2.questions);
+    setRoundComplete(2, r2.questions);
 
-    renderResults(data.result, payload.pointsPossible);
+    // === ROUND 3 ===
+    setRoundActive(3, parsedQuestions.length);
+    const round3Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 100000, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(roundPayload)
+    });
+    const r3 = await round3Data.json();
+    if (!r3.success) throw new Error('Round 3 failed: ' + r3.error);
+    allRounds.push(r3.questions);
+    setRoundComplete(3, r3.questions);
+
+    // === AGGREGATE ===
+    showSpinner('Computing averaged scores…');
+    const aggregated = aggregateRounds(allRounds);
+    const finalPoints = pointsPossible
+      ? parseFloat(((aggregated.percentage / 100) * pointsPossible).toFixed(2))
+      : null;
+
+    // === SYNTHESIZE ===
+    showSpinner('Generating narrative summary and coaching…');
+    document.getElementById('coachingNote').style.display = 'block';
+    const synthData = await fetchWithTimeout(`${BACKEND_URL}/grade-synthesize`, 90000, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chipContexts, priorityChipName,
+        aggregatedQuestions: aggregated.questions,
+        totalScore:    aggregated.totalScore,
+        totalPossible: aggregated.totalPossible,
+        percentage:    aggregated.percentage,
+        finalPoints,
+        roundPcts:     aggregated.roundPcts,
+        spread:        aggregated.spread,
+        pointsPossible,
+        llmInteractions: document.getElementById('llmInteractions').value.trim(),
+        year:    document.getElementById('settingYear').value,
+        section: document.getElementById('settingSection').value.trim(),
+        caseName: document.getElementById('settingCase').value.trim(),
+        team:    document.getElementById('settingTeam').value.trim(),
+        harshness
+      })
+    });
+    const synth = await synthData.json();
+    if (!synth.success) throw new Error('Synthesis failed: ' + synth.error);
+
+    // Merge and render
+    const fullResult = {
+      ...aggregated,
+      finalPoints,
+      narrativeSummary:      synth.narrativeSummary,
+      promptCoaching:        synth.promptCoaching,
+      promptCoachingSummary: synth.promptCoachingSummary
+    };
+
+    renderResults(fullResult, pointsPossible);
 
   } catch (err) {
     if (err.message.includes('timed out')) {
-      showError('The request timed out. This usually means the server is still waking up. Wait 30 seconds and try again.');
+      showError('A round timed out. The server may be under load. Wait 30 seconds and try again.');
     } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      showError('Cannot reach the grading server. Check that your Render service is deployed and running, then try again.');
+      showError('Cannot reach the grading server. Check your Render service is live, then retry.');
     } else {
       showError('Grading failed: ' + err.message);
     }
   } finally {
     document.getElementById('gradeBtn').disabled = false;
     document.getElementById('spinner').className = 'spinner';
-    document.getElementById('spinnerMsg').textContent = '';
+    document.getElementById('progressBoard').style.display = 'none';
+    document.getElementById('coachingNote').style.display = 'none';
   }
 }
 
-// Fetch with a timeout — prevents the browser from hanging forever
-function fetchWithTimeout(url, ms, options = {}) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Request timed out after ${ms/1000}s`)), ms);
-    fetch(url, options)
-      .then(res => { clearTimeout(timer); resolve(res); })
-      .catch(err => { clearTimeout(timer); reject(err); });
+// ============================================================
+// PROGRESS BOARD HELPERS
+// ============================================================
+function initProgressBoard(numQ) {
+  document.getElementById('spinnerMsg').textContent = '';
+  document.getElementById('progressBoard').style.display = 'block';
+  document.getElementById('spinner').className = 'spinner visible';
+  [1,2,3].forEach(r => {
+    document.getElementById(`rl${r}`).className = 'round-label muted';
+    document.getElementById(`rs${r}`).textContent = 'waiting…';
+    const grid = document.getElementById(`pq${r}`);
+    grid.innerHTML = '';
+    for (let q = 1; q <= numQ; q++) {
+      const d = document.createElement('div');
+      d.className = 'progress-q pq-waiting';
+      d.id = `pq${r}q${q}`;
+      d.textContent = `Q${q}`;
+      grid.appendChild(d);
+    }
+  });
+}
+
+function setRoundActive(roundNum, numQ) {
+  document.getElementById(`rl${roundNum}`).className = 'round-label';
+  document.getElementById(`rs${roundNum}`).textContent = 'grading…';
+  for (let q = 1; q <= numQ; q++) {
+    const el = document.getElementById(`pq${roundNum}q${q}`);
+    if (el) { el.className = 'progress-q pq-active'; el.textContent = `Q${q}…`; }
+  }
+  // Animate Q boxes completing one by one (simulated — all actually finish together)
+  let q = 1;
+  const interval = setInterval(() => {
+    const el = document.getElementById(`pq${roundNum}q${q}`);
+    if (el) { el.className = 'progress-q pq-active'; el.textContent = `Q${q}…`; }
+    q++;
+    if (q > numQ) clearInterval(interval);
+  }, 1500);
+  document.getElementById(`pr${roundNum}`)._animInterval = interval;
+}
+
+function setRoundComplete(roundNum, questions) {
+  clearInterval(document.getElementById(`pr${roundNum}`)._animInterval);
+  document.getElementById(`rs${roundNum}`).className = 'round-score';
+  const total = questions.reduce((s, q) => s + (q.questionTotal || 0), 0);
+  const max   = questions.reduce((s, q) => s + (q.questionMax   || 0), 0);
+  const pct   = max > 0 ? ((total / max) * 100).toFixed(1) : '—';
+  document.getElementById(`rs${roundNum}`).textContent = pct + '%';
+  questions.forEach((q, i) => {
+    const el = document.getElementById(`pq${roundNum}q${i + 1}`);
+    if (el) { el.className = 'progress-q pq-done'; el.textContent = `Q${i+1} ✓`; }
   });
 }
 
 function showSpinner(msg) {
   document.getElementById('spinnerMsg').textContent = msg;
   document.getElementById('spinner').className = 'spinner visible';
+}
+
+// ============================================================
+// aggregateRounds — client-side Monte Carlo aggregation
+// ============================================================
+function aggregateRounds(rounds) {
+  // rounds = [ [q1,q2,q3,q4], [q1,q2,q3,q4], [q1,q2,q3,q4] ]
+  const numQ = rounds[0].length;
+
+  // Per-round totals and percentages
+  const roundTotals = rounds.map(r =>
+    r.reduce((s, q) => s + (q.questionTotal || 0), 0)
+  );
+  const roundMaxes = rounds.map(r =>
+    r.reduce((s, q) => s + (q.questionMax || 0), 0)
+  );
+  const roundPcts = rounds.map((r, i) =>
+    roundMaxes[i] > 0 ? parseFloat(((roundTotals[i] / roundMaxes[i]) * 100).toFixed(1)) : 0
+  );
+
+  // Identify median run (index of middle score)
+  const sorted = [...roundPcts].sort((a, b) => a - b);
+  const medianPct = sorted[1];
+  const medianRunIdx = roundPcts.indexOf(medianPct);
+
+  // Build aggregated questions
+  const aggregatedQuestions = [];
+  for (let qi = 0; qi < numQ; qi++) {
+    const qResults = rounds.map(r => r[qi]);
+    const factors = qResults[0].factors || [];
+
+    const avgFactors = factors.map(f => {
+      const fScores = qResults.map(r => {
+        const found = (r.factors || []).find(x => x.factorName === f.factorName);
+        return found ? (found.score || 0) : 0;
+      });
+      const avg = fScores.reduce((s, x) => s + x, 0) / fScores.length;
+      const spread = Math.max(...fScores) - Math.min(...fScores);
+      const medianF = (qResults[medianRunIdx].factors || []).find(x => x.factorName === f.factorName);
+      return {
+        factorName:   f.factorName,
+        evidence:     medianF?.evidence     || 'No evidence found',
+        score:        parseFloat(avg.toFixed(2)),
+        justification: medianF?.justification || '',
+        scoreVariance: parseFloat(spread.toFixed(2)),
+        runScores:    fScores
+      };
+    });
+
+    const qTotal = avgFactors.reduce((s, f) => s + f.score, 0);
+    const qMax   = avgFactors.length; // 1.0 max per factor
+    const qPct   = qMax > 0 ? parseFloat(((qTotal / qMax) * 100).toFixed(1)) : 0;
+    const qRunTotals = rounds.map(r => (r[qi].questionTotal || 0));
+    const qSpread = parseFloat((Math.max(...qRunTotals) - Math.min(...qRunTotals)).toFixed(2));
+
+    aggregatedQuestions.push({
+      questionNumber: qi + 1,
+      questionText:   qResults[0].questionText || '',
+      factors:        avgFactors,
+      questionTotal:  parseFloat(qTotal.toFixed(2)),
+      questionMax:    parseFloat(qMax.toFixed(2)),
+      questionPct:    qPct,
+      questionSpread: qSpread,
+      critique:       qResults[medianRunIdx].critique || '',
+      runTotals:      qRunTotals
+    });
+  }
+
+  const totalScore    = aggregatedQuestions.reduce((s, q) => s + q.questionTotal, 0);
+  const totalPossible = aggregatedQuestions.reduce((s, q) => s + q.questionMax,   0);
+  const percentage    = totalPossible > 0 ? parseFloat(((totalScore / totalPossible) * 100).toFixed(1)) : 0;
+  const spread        = parseFloat((Math.max(...roundPcts) - Math.min(...roundPcts)).toFixed(1));
+
+  return {
+    questions:      aggregatedQuestions,
+    totalScore:     parseFloat(totalScore.toFixed(2)),
+    totalPossible:  parseFloat(totalPossible.toFixed(2)),
+    percentage,
+    roundPcts,
+    medianRunIdx,
+    spread
+  };
 }
 
 function showError(msg) {
@@ -1213,17 +1439,36 @@ function showError(msg) {
 // RENDER RESULTS
 // ============================================================
 function renderResults(result, pointsPossible) {
-  // Score banner
   const pct = result.percentage ? result.percentage.toFixed(1) : '—';
   document.getElementById('resultPct').textContent = pct + '%';
   document.getElementById('resultRaw').textContent =
     `Score: ${result.totalScore} / ${result.totalPossible}`;
 
-  if (result.finalPoints && result.finalPoints !== 'N/A' && pointsPossible) {
+  if (result.finalPoints && pointsPossible) {
     document.getElementById('resultPoints').textContent =
       `Final Grade: ${parseFloat(result.finalPoints).toFixed(1)} / ${pointsPossible} pts`;
   } else {
     document.getElementById('resultPoints').textContent = '';
+  }
+
+  // Run spread row (3 individual run scores, median starred)
+  if (result.roundPcts && result.roundPcts.length === 3) {
+    const row = document.getElementById('runSpreadRow');
+    row.style.display = 'flex';
+    row.innerHTML = result.roundPcts.map((p, i) =>
+      `<span class="run-pill${i === result.medianRunIdx ? ' median' : ''}">Run ${i+1}: ${p}%${i === result.medianRunIdx ? ' ★' : ''}</span>`
+    ).join('');
+  }
+
+  // Consistency badge
+  const spread = result.spread || 0;
+  const cbEl = document.getElementById('consistencyBadge');
+  if (spread <= 2) {
+    cbEl.innerHTML = `<span class="consistency-badge cb-high">High consistency — spread ±${spread}pts</span>`;
+  } else if (spread <= 5) {
+    cbEl.innerHTML = `<span class="consistency-badge cb-moderate">Moderate — spread ±${spread}pts</span>`;
+  } else {
+    cbEl.innerHTML = `<span class="consistency-badge cb-variable">Variable — spread ±${spread}pts · review flagged questions</span>`;
   }
 
   // Question results
@@ -1233,30 +1478,38 @@ function renderResults(result, pointsPossible) {
   (result.questions || []).forEach(q => {
     const block = document.createElement('div');
     block.className = 'question-result';
+    const qPct = q.questionPct || (q.questionMax > 0 ? ((q.questionTotal / q.questionMax) * 100).toFixed(1) : '—');
 
-    const pctQ = q.questionMax > 0 ? ((q.questionTotal / q.questionMax) * 100).toFixed(0) : '—';
+    const qWarn = (q.questionSpread || 0) > 2
+      ? `<div class="variable-warning">Variable across runs — spread ±${q.questionSpread}pts · review evidence below before finalizing</div>`
+      : '';
+
     block.innerHTML = `
       <div class="qr-header">
         <div class="qr-title">Q${q.questionNumber}: ${q.questionText}</div>
-        <div class="qr-score">${q.questionTotal}/${q.questionMax} <span style="font-size:13px;color:#888;">(${pctQ}%)</span></div>
-      </div>`;
+        <div class="qr-score">${q.questionTotal.toFixed(2)}/${q.questionMax.toFixed(2)} <span style="font-size:13px;color:#888;">(${qPct}%)</span></div>
+      </div>
+      ${qWarn}`;
 
     (q.factors || []).forEach(f => {
-      const scoreClass = f.score === 0 ? 's0' : f.score <= 0.25 ? 's25' : f.score <= 0.5 ? 's50' : f.score <= 0.75 ? 's75' : 's100';
-      const scoreLabel = f.score === 0 ? '0' : f.score === 0.25 ? '.25' : f.score === 0.5 ? '.50' : f.score === 0.75 ? '.75' : '1.0';
+      const s = f.score;
+      const scoreClass = s === 0 ? 's0' : s <= 0.25 ? 's25' : s <= 0.5 ? 's50' : s <= 0.75 ? 's75' : 's100';
       const row = document.createElement('div');
       row.className = 'factor-result';
       const evidenceHtml = f.evidence
         ? `<div class="evidence-quote">📎 Evidence: "${f.evidence}"</div>`
         : '';
+      const varianceHtml = (f.scoreVariance || 0) > 0
+        ? `<div class="factor-variance">Run scores: ${(f.runScores || []).join(' / ')} (variance ±${f.scoreVariance})</div>`
+        : '';
       row.innerHTML = `
-        <div class="fr-score ${scoreClass}">${scoreLabel}</div>
+        <div class="fr-score ${scoreClass}">${s.toFixed(2)}</div>
         <div style="flex:1;">
           <div style="display:flex;gap:10px;align-items:flex-start;">
             <div class="fr-name" style="flex:1;">${f.factorName}</div>
             <div class="fr-just" style="flex:2;">${f.justification}</div>
           </div>
-          ${evidenceHtml}
+          ${evidenceHtml}${varianceHtml}
         </div>`;
       block.appendChild(row);
     });
@@ -1264,7 +1517,7 @@ function renderResults(result, pointsPossible) {
     if (q.critique) {
       const critiqueBox = document.createElement('div');
       critiqueBox.className = 'critique-box';
-      critiqueBox.innerHTML = `<strong>Critique:</strong> ${q.critique}`;
+      critiqueBox.innerHTML = `<span class="median-label">Critique — median run (run ${(result.medianRunIdx || 0) + 1})</span>${q.critique}`;
       block.appendChild(critiqueBox);
     }
 
@@ -1272,7 +1525,7 @@ function renderResults(result, pointsPossible) {
   });
 
   // Prompt coaching
-  if (result.promptCoaching && result.promptCoaching !== 'No LLM interactions provided') {
+  if (result.promptCoaching && !result.promptCoaching.startsWith('No LLM')) {
     document.getElementById('coachingText').textContent = result.promptCoaching;
     document.getElementById('coachingSection').style.display = 'block';
   } else {
@@ -1282,19 +1535,19 @@ function renderResults(result, pointsPossible) {
   // Narrative summary
   const ns = result.narrativeSummary;
   if (ns) {
-    document.getElementById('superpowerText').textContent = ns.superpower || '';
+    document.getElementById('superpowerText').textContent   = ns.superpower  || '';
     document.getElementById('improvementsText').textContent = ns.improvements || '';
-    document.getElementById('watchforText').textContent = ns.watchFor || '';
-    document.getElementById('oneSentenceBox').textContent = ns.oneSentenceSummary || '';
+    document.getElementById('watchforText').textContent     = ns.watchFor    || '';
+    document.getElementById('oneSentenceBox').textContent   = ns.oneSentenceSummary || '';
     document.getElementById('narrativeSection').style.display = 'block';
   } else {
     document.getElementById('narrativeSection').style.display = 'none';
   }
 
-  // Show results
   document.getElementById('resultsSection').className = 'results-section visible';
   document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
 </script>
 </body>
 </html>
