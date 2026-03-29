@@ -347,8 +347,7 @@
         <div class="dropzone-hint">PDF, Word (.docx), or .txt — drag & drop or click</div>
         <div class="dropzone-status" id="caseStatus"></div>
       </div>
-      <input type="file" id="caseFile" accept=".pdf,.txt,.docx,.doc" style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>
-      <div class="paste-area">
+      <input type="file" id="caseFile" accept=".pdf,.txt,.docx,.doc" style="display:none" onchange="handleFileSelect(event,'caseZone','caseStatus','caseText')"/>      <div class="paste-area">
         <textarea id="caseText" rows="3" oninput="saveCaseText()" placeholder="Or paste case study text here…"></textarea>
       </div>
     </div>
@@ -1257,7 +1256,7 @@ async function gradePaper() {
 
     // === ROUND 1 ===
     setRoundActive(1, parsedQuestions.length);
-    const round1Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 100000, {
+    const round1Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 300000, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(roundPayload)
     });
@@ -1268,7 +1267,7 @@ async function gradePaper() {
 
     // === ROUND 2 ===
     setRoundActive(2, parsedQuestions.length);
-    const round2Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 100000, {
+    const round2Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 300000, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(roundPayload)
     });
@@ -1279,7 +1278,7 @@ async function gradePaper() {
 
     // === ROUND 3 ===
     setRoundActive(3, parsedQuestions.length);
-    const round3Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 100000, {
+    const round3Data = await fetchWithTimeout(`${BACKEND_URL}/grade-round`, 300000, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(roundPayload)
     });
@@ -1373,19 +1372,23 @@ function initProgressBoard(numQ) {
 function setRoundActive(roundNum, numQ) {
   document.getElementById(`rl${roundNum}`).className = 'round-label';
   document.getElementById(`rs${roundNum}`).textContent = 'grading…';
+  // Show all Q boxes as active initially
   for (let q = 1; q <= numQ; q++) {
     const el = document.getElementById(`pq${roundNum}q${q}`);
-    if (el) { el.className = 'progress-q pq-active'; el.textContent = `Q${q}…`; }
+    if (el) { el.className = 'progress-q pq-waiting'; el.textContent = `Q${q}`; }
   }
-  // Animate Q boxes completing one by one (simulated — all actually finish together)
+  // Animate Q boxes appearing one at a time (~15s each — matches Haiku sequential speed)
   let q = 1;
   const interval = setInterval(() => {
     const el = document.getElementById(`pq${roundNum}q${q}`);
     if (el) { el.className = 'progress-q pq-active'; el.textContent = `Q${q}…`; }
     q++;
     if (q > numQ) clearInterval(interval);
-  }, 1500);
+  }, 15000);
   document.getElementById(`pr${roundNum}`)._animInterval = interval;
+  // Also activate Q1 immediately
+  const q1 = document.getElementById(`pq${roundNum}q1`);
+  if (q1) { q1.className = 'progress-q pq-active'; q1.textContent = 'Q1…'; }
 }
 
 function setRoundComplete(roundNum, questions) {
