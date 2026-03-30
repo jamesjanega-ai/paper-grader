@@ -1164,14 +1164,17 @@ function buildRubric(silent = false) {
     RUBRIC_FACTORS.forEach(factor => {
       const isChecked = !FACTORS_OPT_IN.has(factor.name);
       const w = factorWeights[factor.name] || 1;
-      const item = document.createElement('label');
+      const item = document.createElement('div');
       item.className = 'factor-item';
       item.innerHTML = `
-        <input type="checkbox" data-q="${i}" data-factor="${factor.name}"
-          ${isChecked ? 'checked' : ''}
-          onchange="toggleFactor(${i},'${factor.name}',this.checked)" />
-        <span class="factor-text"><span class="factor-name">${factor.name}:</span> ${factor.desc}</span>
-        <span class="weight-btns" onclick="event.preventDefault()">
+        <label style="display:flex;align-items:flex-start;gap:6px;flex:1;cursor:pointer;min-width:0;">
+          <input type="checkbox" data-q="${i}" data-factor="${factor.name}"
+            ${isChecked ? 'checked' : ''}
+            onchange="toggleFactor(${i},'${factor.name}',this.checked)"
+            style="flex-shrink:0;margin-top:2px;" />
+          <span class="factor-text"><span class="factor-name">${factor.name}:</span> ${factor.desc}</span>
+        </label>
+        <span class="weight-btns">
           <button class="wbtn${w===1?' active':''}" data-w="1" onclick="setWeight('${factor.name}',1,this)">1×</button>
           <button class="wbtn${w===2?' active':''}" data-w="2" onclick="setWeight('${factor.name}',2,this)">2×</button>
           <button class="wbtn${w===3?' active':''}" data-w="3" onclick="setWeight('${factor.name}',3,this)">3×</button>
