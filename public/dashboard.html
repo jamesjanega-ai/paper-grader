@@ -236,6 +236,21 @@ table.timeline tr:hover td { background: #fafbff; }
 <div id="tab-model" class="tab-content">
 <div class="container">
 
+  <!-- Model Health Filters -->
+  <div class="filters" style="margin-bottom:20px;">
+    <div class="filter-group">
+      <label>Year</label>
+      <select id="mYear" onchange="applyModelFilters()"><option value="">All years</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Section</label>
+      <select id="mSection" onchange="applyModelFilters()"><option value="">All sections</option></select>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:flex-end;">
+      <span id="mFilterCount" style="font-size:12px;color:#888;"></span>
+    </div>
+  </div>
+
   <!-- Model summary cards -->
   <div class="cards" id="modelCards">
     <div class="loading"><div class="loading-ring"></div>Loading…</div>
@@ -326,6 +341,7 @@ table.timeline tr:hover td { background: #fafbff; }
 // ════════════════════════════════════════
 let allRows        = [];
 let filteredRows   = [];
+let modelFilteredRows = [];   // model health tab — filtered by year+section
 let selectedTeams  = new Map();
 let nextColorIdx   = 0;
 let gapShowPts     = false;   // toggle between % and raw pts on gap card
@@ -435,9 +451,12 @@ function populateFilters() {
   fillSelect('fYear',    unique('year'));
   fillSelect('fSection', unique('section'));
   fillSelect('fCase',    unique('caseName'));
-  // Cohort chart filters (year + section only)
+  // Cohort chart filters
   fillSelect('cYear',    unique('year'));
   fillSelect('cSection', unique('section'));
+  // Model health filters
+  fillSelect('mYear',    unique('year'));
+  fillSelect('mSection', unique('section'));
 }
 
 function fillSelect(id, vals) {
@@ -894,181 +913,176 @@ async function analyzeThemes() {
 // ════════════════════════════════════════
 // MODEL HEALTH TAB
 // ════════════════════════════════════════
+// ════════════════════════════════════════
+// MODEL HEALTH — FILTERS + RENDERERS
+// ════════════════════════════════════════
+function applyModelFilters() {
+  const year    = document.getElementById('mYear')?.value    || '';
+  const section = document.getElementById('mSection')?.value || '';
+  modelFilteredRows = allRows.filter(r =>
+    (!year    || r.year    === year) &&
+    (!section || r.section === section)
+  );
+  const count = document.getElementById('mFilterCount');
+  if (count) count.textContent = modelFilteredRows.length + ' session' + (modelFilteredRows.length !== 1 ? 's' : '');
+  renderModelTab();
+}
+
 function renderModelTab() {
   const status = document.getElementById('modelStatus');
   if (!allRows.length) {
     if (status) status.innerHTML = `
       <p style="color:#e67e22;font-weight:600;">No grading data found.</p>
       <p style="margin-top:8px;font-size:12px;">Possible causes:<br>
-      • Apps Script <code>doGet</code> handler not yet deployed (paste new apps-script.gs and deploy new version)<br>
+      • Apps Script <code>doGet</code> handler not yet deployed<br>
       • Render server not updated (push latest server.js to GitHub)<br>
       • <code>GOOGLE_SCRIPT_URL</code> env var missing on Render<br>
       • Google Sheet has no rows yet</p>
       <button onclick="loadData()" style="margin-top:12px;padding:6px 16px;background:#4a6cf7;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">↻ Try again</button>`;
     return;
   }
-  // Data loaded — hide diagnostic, show charts
   if (status) status.style.display = 'none';
-  renderModelCards();
-  renderScoreTrendChart();
-  renderSpreadChart();
-  renderHarshChart();
-  renderConsistencyChart();
-  renderRunChart();
-  renderSessionTable();
+  // Initialise filtered rows if not yet set
+  if (!modelFilteredRows.length && allRows.length) modelFilteredRows = [...allRows];
+  const rows = modelFilteredRows;
+  renderModelCards(rows);
+  renderScoreTrendChart(rows);
+  renderSpreadChart(rows);
+  renderHarshChart(rows);
+  renderConsistencyChart(rows);
+  renderRunChart(rows);
+  renderSessionTable(rows);
 }
 
-function renderModelCards() {
-  const mcRows = allRows.filter(r => r.spread !== null);
-  if (!allRows.length) { document.getElementById('modelCards').innerHTML = '<div class="empty-state"><p>No model data yet.</p></div>'; return; }
+function renderModelCards(rows) {
+  const mcRows = rows.filter(r => r.spread !== null);
+  if (!rows.length) {
+    document.getElementById('modelCards').innerHTML = '<div class="empty-state"><p>No data for selected filters.</p></div>';
+    return;
+  }
   const avgSpread = avg(mcRows.map(r => r.spread).filter(v => v !== null));
   const highCons  = mcRows.filter(r => r.consistency === 'High').length;
   const varCons   = mcRows.filter(r => r.consistency === 'Variable').length;
   const pctHigh   = mcRows.length ? ((highCons / mcRows.length) * 100).toFixed(0) : 0;
   document.getElementById('modelCards').innerHTML = `
-    <div class="card blue"><div class="card-label">Total sessions</div><div class="card-value">${allRows.length}</div><div class="card-sub">${mcRows.length} Monte Carlo</div></div>
+    <div class="card blue"><div class="card-label">Sessions</div><div class="card-value">${rows.length}</div><div class="card-sub">${mcRows.length} Monte Carlo</div></div>
     <div class="card green"><div class="card-label">High consistency</div><div class="card-value">${pctHigh}%</div><div class="card-sub">${highCons} of ${mcRows.length} MC sessions</div></div>
     <div class="card amber"><div class="card-label">Avg MC spread</div><div class="card-value">${avgSpread!==null?avgSpread.toFixed(1)+'%':'—'}</div><div class="card-sub">Run max − run min</div></div>
-    <div class="card coral"><div class="card-label">Variable sessions</div><div class="card-value">${varCons}</div><div class="card-sub">Spread &gt;5% · flag for review</div></div>
+    <div class="card coral"><div class="card-label">Variable sessions</div><div class="card-value">${varCons}</div><div class="card-sub">Spread &gt;7% · flag for review</div></div>
   `;
 }
 
-function renderScoreTrendChart() {
+function renderScoreTrendChart(rows) {
   destroyChart('trend');
-  const rows = allRows.filter(r => r.finalPct !== null && r.date).sort((a,b) => a.date - b.date);
-  if (!rows.length) return;
-  const cases   = [...new Set(rows.map(r => r.caseName).filter(Boolean))];
+  const sorted = rows.filter(r => r.finalPct !== null && r.date).sort((a,b) => a.date - b.date);
+  if (!sorted.length) return;
+  const cases   = [...new Set(sorted.map(r => r.caseName).filter(Boolean))];
   const palette = ['#4a6cf7','#27ae60','#e67e22','#e74c3c','#9b59b6','#1abc9c','#f39c12','#2980b9'];
   const caseColor = {};
   cases.forEach((c, i) => { caseColor[c] = palette[i % palette.length]; });
   const datasets = cases.map(c => ({
     label: c || 'Unknown',
-    data: rows.filter(r => r.caseName === c).map(r => ({
-      x: r.date.getTime(),
-      y: parseFloat(r.finalPct.toFixed(1)),
+    data: sorted.filter(r => r.caseName === c).map(r => ({
+      x: r.date.getTime(), y: parseFloat(r.finalPct.toFixed(1)),
       team: r.team, section: r.section, harshness: r.harshness
     })),
-    backgroundColor: caseColor[c] + 'aa',
-    borderColor: caseColor[c],
+    backgroundColor: caseColor[c] + 'aa', borderColor: caseColor[c],
     pointRadius: 5, pointHoverRadius: 7, showLine: false
   }));
-  const overallAvg = avg(rows.map(r => r.finalPct));
-  const minT = rows[0].date.getTime(), maxT = rows[rows.length-1].date.getTime();
+  const overallAvg = avg(sorted.map(r => r.finalPct));
+  const minT = sorted[0].date.getTime(), maxT = sorted[sorted.length-1].date.getTime();
   datasets.push({
     label: `All-time avg (${overallAvg.toFixed(1)}%)`,
     data: [{x:minT,y:parseFloat(overallAvg.toFixed(1))},{x:maxT,y:parseFloat(overallAvg.toFixed(1))}],
-    borderColor:'rgba(0,0,0,0.3)', borderDash:[6,4], borderWidth:1.5,
-    pointRadius:0, showLine:true, fill:false
+    borderColor:'rgba(0,0,0,0.3)', borderDash:[6,4], borderWidth:1.5, pointRadius:0, showLine:true, fill:false
   });
   charts['trend'] = new Chart(document.getElementById('trendChart'), {
-    type: 'scatter', data: { datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position:'bottom', labels:{ font:{size:11}, padding:12, boxWidth:12 } },
-        tooltip: { callbacks: { label: ctx => {
-          const d = ctx.raw;
-          if (!d.team) return `Avg: ${d.y}%`;
-          return `${d.team} (${d.section||'?'}) — ${d.y}%` + (d.harshness ? ` @ ${d.harshness.toFixed(0)}% harsh` : '');
-        }}}
+    type:'scatter', data:{datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom',labels:{font:{size:11},padding:12,boxWidth:12}},
+        tooltip:{callbacks:{label:ctx=>{const d=ctx.raw;if(!d.team)return`Avg: ${d.y}%`;return`${d.team}(${d.section||'?'})—${d.y}%`+(d.harshness?` @ ${d.harshness.toFixed(0)}% harsh`:'');}}}
       },
-      scales: {
-        x: { type:'linear', ticks:{ font:{size:10}, callback: v => new Date(v).toLocaleDateString('en-US',{month:'short',day:'numeric'}) }, grid:{color:'rgba(0,0,0,0.05)'} },
-        y: { min:0, max:100, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} }
+      scales:{
+        x:{type:'linear',ticks:{font:{size:10},callback:v=>new Date(v).toLocaleDateString('en-US',{month:'short',day:'numeric'})},grid:{color:'rgba(0,0,0,0.05)'}},
+        y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.06)'}}
       }
     }
   });
 }
 
-function renderSpreadChart() {
+function renderSpreadChart(rows) {
   destroyChart('spread');
-  const rows = allRows.filter(r => r.spread !== null && r.date).sort((a,b) => a.date - b.date);
-  if (!rows.length) {
-    document.getElementById('spreadChart').insertAdjacentHTML('afterend','<p style="color:#aaa;font-size:12px;text-align:center;margin-top:8px;">No Monte Carlo sessions yet.</p>');
+  const mcRows = rows.filter(r => r.spread !== null && r.date).sort((a,b) => a.date - b.date);
+  if (!mcRows.length) {
+    document.getElementById('spreadChart').insertAdjacentHTML('afterend','<p style="color:#aaa;font-size:12px;text-align:center;margin-top:8px;">No Monte Carlo sessions in this filter.</p>');
     return;
   }
-  const colors = rows.map(r => r.spread > 7 ? '#e74c3c' : r.spread > 3 ? '#e67e22' : '#27ae60');
+  const colors = mcRows.map(r => r.spread > 7 ? '#e74c3c' : r.spread > 3 ? '#e67e22' : '#27ae60');
   charts['spread'] = new Chart(document.getElementById('spreadChart'), {
-    type: 'bar',
-    data: { labels: rows.map(r=>`${r.team||'?'}`), datasets:[{
-      label:'Spread %', data: rows.map(r=>parseFloat(r.spread.toFixed(1))),
-      backgroundColor: colors, borderRadius:3
-    }]},
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false} },
-      scales:{
-        y:{ beginAtZero:true, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'}},
-        x:{ ticks:{maxRotation:55,font:{size:9},maxTicksLimit:20}, grid:{display:false}}
-      }
-    }
+    type:'bar',
+    data:{labels:mcRows.map(r=>`${r.team||'?'}`), datasets:[{label:'Spread %',data:mcRows.map(r=>parseFloat(r.spread.toFixed(1))),backgroundColor:colors,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.06)'}},x:{ticks:{maxRotation:55,font:{size:9},maxTicksLimit:20},grid:{display:false}}}}
   });
 }
 
-function renderHarshChart() {
+function renderHarshChart(rows) {
   destroyChart('harsh');
-  const pts = allRows.filter(r => r.harshness !== null && r.finalPct !== null);
+  const pts = rows.filter(r => r.harshness !== null && r.finalPct !== null);
   if (!pts.length) return;
   charts['harsh'] = new Chart(document.getElementById('harshChart'), {
     type:'scatter',
-    data:{ datasets:[{ label:'Team', data: pts.map(r=>({x:parseFloat(r.harshness.toFixed(0)),y:parseFloat(r.finalPct.toFixed(1))})), backgroundColor:'rgba(74,108,247,0.5)', pointRadius:5 }]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false} },
-      scales:{
-        x:{ title:{display:true,text:'Harshness %',font:{size:11}}, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'}},
-        y:{ min:0, max:100, title:{display:true,text:'Final Score %',font:{size:11}}, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'}}
-      }
-    }
+    data:{datasets:[{label:'Team',data:pts.map(r=>({x:parseFloat(r.harshness.toFixed(0)),y:parseFloat(r.finalPct.toFixed(1))})),backgroundColor:'rgba(74,108,247,0.5)',pointRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Harshness %',font:{size:11}},ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.06)'}},
+              y:{min:0,max:100,title:{display:true,text:'Final Score %',font:{size:11}},ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.06)'}}}}
   });
 }
 
-function renderConsistencyChart() {
+function renderConsistencyChart(rows) {
   destroyChart('consistency');
-  const mcRows = allRows.filter(r => r.consistency && r.consistency !== '');
+  const mcRows = rows.filter(r => r.consistency && r.consistency !== '');
   if (!mcRows.length) {
-    document.getElementById('consistencyChart').insertAdjacentHTML('afterend','<p style="color:#aaa;font-size:12px;text-align:center;margin-top:8px;">No Monte Carlo sessions yet.</p>');
+    document.getElementById('consistencyChart').insertAdjacentHTML('afterend','<p style="color:#aaa;font-size:12px;text-align:center;margin-top:8px;">No Monte Carlo sessions in this filter.</p>');
     return;
   }
-  const counts = { High:0, Moderate:0, Variable:0 };
+  const counts = {High:0,Moderate:0,Variable:0};
   mcRows.forEach(r => { if (counts[r.consistency]!==undefined) counts[r.consistency]++; });
   charts['consistency'] = new Chart(document.getElementById('consistencyChart'), {
     type:'doughnut',
-    data:{ labels:['High','Moderate','Variable'], datasets:[{ data:[counts.High,counts.Moderate,counts.Variable], backgroundColor:['#27ae60','#e67e22','#e74c3c'], borderWidth:0 }]},
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{font:{size:11},padding:12}}}}
+    data:{labels:['High','Moderate','Variable'],datasets:[{data:[counts.High,counts.Moderate,counts.Variable],backgroundColor:['#27ae60','#e67e22','#e74c3c'],borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12}}}}
   });
 }
 
-function renderRunChart() {
+function renderRunChart(rows) {
   destroyChart('run');
-  const pts = allRows.filter(r => r.run1 !== null && r.run2 !== null);
+  const pts = rows.filter(r => r.run1 !== null && r.run2 !== null);
   if (pts.length < 2) {
     document.getElementById('runChart').insertAdjacentHTML('afterend','<p style="color:#aaa;font-size:12px;text-align:center;margin-top:8px;">Need more Monte Carlo sessions.</p>');
     return;
   }
   charts['run'] = new Chart(document.getElementById('runChart'), {
     type:'scatter',
-    data:{ datasets:[
-      { label:'Run 1 vs 2', data:pts.map(r=>({x:parseFloat(r.run1.toFixed(1)),y:parseFloat(r.run2.toFixed(1))})), backgroundColor:'rgba(74,108,247,0.55)', pointRadius:5 },
-      { label:'Run 1 vs 3', data:pts.filter(r=>r.run3!==null).map(r=>({x:parseFloat(r.run1.toFixed(1)),y:parseFloat(r.run3.toFixed(1))})), backgroundColor:'rgba(39,174,96,0.55)', pointRadius:5 },
-      { label:'Perfect agreement', data:[{x:40,y:40},{x:100,y:100}], type:'line', borderColor:'rgba(0,0,0,0.15)', borderDash:[4,4], borderWidth:1.5, pointRadius:0, fill:false }
+    data:{datasets:[
+      {label:'Run 1 vs 2',data:pts.map(r=>({x:parseFloat(r.run1.toFixed(1)),y:parseFloat(r.run2.toFixed(1))})),backgroundColor:'rgba(74,108,247,0.55)',pointRadius:5},
+      {label:'Run 1 vs 3',data:pts.filter(r=>r.run3!==null).map(r=>({x:parseFloat(r.run1.toFixed(1)),y:parseFloat(r.run3.toFixed(1))})),backgroundColor:'rgba(39,174,96,0.55)',pointRadius:5},
+      {label:'Perfect agreement',data:[{x:40,y:40},{x:100,y:100}],type:'line',borderColor:'rgba(0,0,0,0.15)',borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false}
     ]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:8}}},
-      scales:{
-        x:{ min:40,max:100, title:{display:true,text:'Run 1 %',font:{size:11}}, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'}},
-        y:{ min:40,max:100, title:{display:true,text:'Run 2 / 3 %',font:{size:11}}, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'}}
-      }
-    }
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:8}}},
+      scales:{x:{min:40,max:100,title:{display:true,text:'Run 1 %',font:{size:11}},ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.06)'}},
+              y:{min:40,max:100,title:{display:true,text:'Run 2 / 3 %',font:{size:11}},ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.06)'}}}}
   });
 }
 
-function renderSessionTable() {
-  const rows = [...allRows].sort((a,b)=>(b.date||0)-(a.date||0)).slice(0,40);
-  const fmt  = v => v!==null ? v.toFixed(1)+'%' : '—';
+function renderSessionTable(rows) {
+  const sorted = [...rows].sort((a,b)=>(b.date||0)-(a.date||0)).slice(0,40);
+  const fmt    = v => v!==null ? v.toFixed(1)+'%' : '—';
   const cBadge = c => c ? `<span class="badge badge-${c.toLowerCase()}">${c}</span>` : '—';
-  document.getElementById('sessionBody').innerHTML = rows.map(r=>`
+  document.getElementById('sessionBody').innerHTML = sorted.map(r=>`
     <tr>
       <td>${r.dateStr}</td><td>${r.section||'—'}</td><td>${r.caseName||'—'}</td><td>${r.team||'—'}</td>
       <td style="font-weight:600;">${fmt(r.finalPct)}</td>
@@ -1076,135 +1090,7 @@ function renderSessionTable() {
       <td>${fmt(r.run1)}</td><td>${fmt(r.run2)}</td><td>${fmt(r.run3)}</td>
       <td>${fmt(r.spread)}</td><td>${cBadge(r.consistency)}</td>
     </tr>
-  `).join('')||'<tr><td colspan="11" style="text-align:center;color:#aaa;padding:20px;">No sessions yet.</td></tr>';
-}
-
-// (model health functions continue below)
-
-function renderModelCards() {
-  const rows = allRows.filter(r => r.spread !== null);
-  if (!rows.length) { document.getElementById('modelCards').innerHTML = '<div class="empty-state"><p>No model data yet. Grade some papers first.</p></div>'; return; }
-  const spreadVals = rows.map(r => r.spread).filter(v => v !== null);
-  const avgSpread = avg(spreadVals);
-  const highCons = rows.filter(r => r.consistency === 'High').length;
-  const varCons  = rows.filter(r => r.consistency === 'Variable').length;
-  const pctHigh  = rows.length ? ((highCons / rows.length) * 100).toFixed(0) : 0;
-
-  document.getElementById('modelCards').innerHTML = `
-    <div class="card blue"><div class="card-label">Total sessions</div><div class="card-value">${allRows.length}</div><div class="card-sub">All time</div></div>
-    <div class="card green"><div class="card-label">High consistency</div><div class="card-value">${pctHigh}%</div><div class="card-sub">${highCons} of ${rows.length} graded</div></div>
-    <div class="card amber"><div class="card-label">Avg Monte Carlo spread</div><div class="card-value">${avgSpread!==null?avgSpread.toFixed(1)+'%':'—'}</div><div class="card-sub">Run max − run min, per team</div></div>
-    <div class="card coral"><div class="card-label">Variable sessions</div><div class="card-value">${varCons}</div><div class="card-sub">Spread &gt;5% · flag for review</div></div>
-  `;
-}
-
-function renderSpreadChart() {
-  destroyChart('spread');
-  const rows = allRows.filter(r => r.spread !== null && r.date).sort((a,b) => a.date - b.date).slice(-40);
-  if (rows.length < 2) return;
-  charts['spread'] = new Chart(document.getElementById('spreadChart'), {
-    type: 'line',
-    data: {
-      labels: rows.map(r => r.dateStr),
-      datasets: [{
-        label: 'Spread (pts)', data: rows.map(r => parseFloat(r.spread.toFixed(1))),
-        borderColor: '#4a6cf7', backgroundColor: 'rgba(74,108,247,0.1)', borderWidth: 2,
-        pointRadius: 3, fill: true, tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { beginAtZero: true, ticks: { font:{size:11} }, grid:{ color:'rgba(0,0,0,0.06)' } },
-        x: { ticks: { maxRotation:45, font:{size:10}, maxTicksLimit:10 }, grid:{ display:false } }
-      }
-    }
-  });
-}
-
-function renderConsistencyChart() {
-  destroyChart('consistency');
-  const counts = { High: 0, Moderate: 0, Variable: 0 };
-  allRows.forEach(r => { if (counts[r.consistency] !== undefined) counts[r.consistency]++; });
-  charts['consistency'] = new Chart(document.getElementById('consistencyChart'), {
-    type: 'doughnut',
-    data: {
-      labels: ['High', 'Moderate', 'Variable'],
-      datasets: [{ data: [counts.High, counts.Moderate, counts.Variable],
-        backgroundColor: ['#27ae60','#e67e22','#e74c3c'], borderWidth: 0 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { font:{size:11}, padding:12 } } }
-    }
-  });
-}
-
-function renderHarshChart() {
-  destroyChart('harsh');
-  const pts = allRows.filter(r => r.harshness !== null && r.finalPct !== null)
-    .map(r => ({ x: r.harshness, y: r.finalPct }));
-  if (!pts.length) return;
-  charts['harsh'] = new Chart(document.getElementById('harshChart'), {
-    type: 'scatter',
-    data: { datasets: [{ label: 'Session', data: pts, backgroundColor: 'rgba(74,108,247,0.5)', pointRadius: 5 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { title:{ display:true, text:'Harshness %', font:{size:11} }, ticks:{font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} },
-        y: { title:{ display:true, text:'Final %', font:{size:11} }, min:0, max:100, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} }
-      }
-    }
-  });
-}
-
-function renderRunChart() {
-  destroyChart('run');
-  const pts = allRows.filter(r => r.run1 !== null && r.run2 !== null)
-    .map(r => ({ x: r.run1, y: r.run2, r3: r.run3 }));
-  if (!pts.length) return;
-  charts['run'] = new Chart(document.getElementById('runChart'), {
-    type: 'scatter',
-    data: {
-      datasets: [
-        { label: 'Run 1 vs 2', data: pts.map(p => ({x:p.x, y:p.y})), backgroundColor: 'rgba(74,108,247,0.5)', pointRadius: 5 },
-        { label: 'Run 1 vs 3', data: pts.filter(p=>p.r3!==null).map(p=>({x:p.x,y:p.r3})), backgroundColor: 'rgba(39,174,96,0.5)', pointRadius: 5 },
-        { label: 'Perfect agreement', data: [{x:0,y:0},{x:100,y:100}], type:'line',
-          borderColor:'rgba(0,0,0,0.15)', borderDash:[4,4], borderWidth:1, pointRadius:0 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position:'bottom', labels:{ font:{size:10}, boxWidth:10, padding:8 } } },
-      scales: {
-        x: { min:0, max:100, title:{display:true, text:'Run 1 %', font:{size:11}}, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} },
-        y: { min:0, max:100, title:{display:true, text:'Run 2 / Run 3 %', font:{size:11}}, ticks:{callback:v=>v+'%',font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} }
-      }
-    }
-  });
-}
-
-function renderSessionTable() {
-  const rows = [...allRows].sort((a,b) => (b.date||0) - (a.date||0)).slice(0, 30);
-  const cBadge = c => `<span class="badge badge-${(c||'').toLowerCase()}">${c||'—'}</span>`;
-  const fmt = v => v !== null ? v.toFixed(1)+'%' : '—';
-  document.getElementById('sessionBody').innerHTML = rows.map(r => `
-    <tr>
-      <td>${r.dateStr}</td>
-      <td>${r.section||'—'}</td>
-      <td>${r.caseName||'—'}</td>
-      <td>${r.team||'—'}</td>
-      <td style="font-weight:600;">${fmt(r.finalPct)}</td>
-      <td>${fmt(r.run1)}</td>
-      <td>${fmt(r.run2)}</td>
-      <td>${fmt(r.run3)}</td>
-      <td>${fmt(r.spread)}</td>
-      <td>${cBadge(r.consistency)}</td>
-      <td>${r.harshness!==null?r.harshness+'%':'—'}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="11" style="text-align:center;color:#aaa;padding:20px;">No sessions logged yet.</td></tr>';
+  `).join('')||'<tr><td colspan="11" style="text-align:center;color:#aaa;padding:20px;">No sessions match this filter.</td></tr>';
 }
 
 // ════════════════════════════════════════
