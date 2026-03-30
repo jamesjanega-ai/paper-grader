@@ -46,15 +46,16 @@ app.post('/grade-round', async (req, res) => {
 
     const scores = adjustedScores || { absent:0, incomplete:0.25, partial:0.50, strong:0.75, mastery:1.0 };
 
-    // GPT-4o mini: ~100x cheaper than Opus, excellent at structured JSON scoring.
-    // Behavioral anchors + temperature=0 ensure consistent rule-following.
-    const rawText = await callOpenAIWithTimeout(
+    // Claude Opus for all grading rounds — temperature=0, stable, consistent.
+    // Best spread results (0.0%–0.5%) were achieved with Opus + behavioral anchors.
+    const rawText = await callClaudeWithTimeout(
       buildRoundPrompt(
         chipContexts, priorityChipName, questions, rubricSelections,
         caseText, studentPaperText, harshness, scores, blindGrade
       ),
-      8000,    // all questions in one response
-      120000   // 2-minute timeout
+      8000,
+      120000,
+      'claude-opus-4-5'
     );
 
     // Parse and SANITIZE the questions array from GPT's response.
@@ -160,42 +161,7 @@ app.post('/grade-synthesize', async (req, res) => {
 
 
 // ============================================================
-// callOpenAIWithTimeout — GPT-4o mini for grading rounds
-// ~100x cheaper than Opus for structured JSON scoring tasks.
-// Synthesis + coaching stay on Claude (narrative quality matters there).
-// ============================================================
-async function callOpenAIWithTimeout(prompt, maxTokens, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model:       'gpt-4o-mini',
-        max_tokens:  maxTokens,
-        temperature: 0,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error('OpenAI API error: ' + (data.error?.message || 'Unknown'));
-    return data.choices[0].message.content;
-
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-
-// ============================================================
-// callClaudeWithTimeout — Claude for synthesis + coaching only
+// callClaudeWithTimeout — all API calls go through Claude
 // ============================================================
 async function callClaudeWithTimeout(prompt, maxTokens, timeoutMs, model = 'claude-opus-4-5') {
   const controller = new AbortController();
