@@ -830,7 +830,27 @@ let selectedChips = new Set();
 let priorityChip = null;
 let parsedQuestions = [];
 let rubricSelections = {}; // { questionIndex: Set of factor names }
-let factorWeights    = {}; // { factorName: 1|2|3 } — default 1
+let factorWeights    = {}; // { factorName: 1|2|3 }
+
+// Default weight profile — matches calibrated settings
+// Change weights in Step 3 to override; saved to localStorage automatically
+const DEFAULT_WEIGHTS = {
+  'Identification of Key Issues':          3,
+  'Use of Theoretical Frameworks':         2,
+  'Analysis and Critical Thinking':        3,
+  'Development of Alternatives':           2,
+  'Recommendations':                       2,
+  'Justification and Support':             2,
+  'Professional Writing Skills':           1,
+  'Organization and Coherence':            1,
+  'Citation and Referencing':              1,  // unchecked by default
+  'Realism and Feasibility':               2,
+  'Reflection and Self-Assessment':        2,
+  'Creativity and Originality':            1,
+  'Professionalism and Ethical Considerations': 1,  // unchecked by default
+  'Communication Skills':                  1,
+  'Peer and Team Evaluation':              1,  // unchecked by default
+};
 let lastRawRounds    = null; // cache for re-aggregation without regrading
 
 // ============================================================
@@ -927,7 +947,12 @@ function loadRubricState() {
   if (!saved || !saved.questions || !saved.questions.length) return;
 
   // Restore weights first so buildRubric renders them correctly
-  if (saved.weights) factorWeights = saved.weights;
+  // Fall back to DEFAULT_WEIGHTS if nothing saved yet
+  if (saved.weights) {
+    factorWeights = saved.weights;
+  } else {
+    factorWeights = { ...DEFAULT_WEIGHTS };
+  }
 
   // Restore question text
   document.getElementById('questionsInput').value = saved.questions.join('\n');
@@ -1006,10 +1031,11 @@ function updateCaseBadge(hasCase) {
 // FULL INITIALIZATION — runs once when page loads
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
+  factorWeights = { ...DEFAULT_WEIGHTS };  // start with defaults; overridden by loadRubricState if saved
   loadSettings();        // Step 0: year/section/case/team/blind
   loadChipsState();      // Step 1: chips + priority
   loadSliderState();     // Harshness slider
-  loadRubricState();     // Step 2+3: questions + rubric selections
+  loadRubricState();     // Step 2+3: questions + rubric selections + weights
   loadCaseText();        // Step 4: case study (persists across sessions)
   loadPointsPossible();  // Step 5: total points possible
 });
@@ -1126,6 +1152,7 @@ function recalculateWithWeights() {
 
 // These two factors are unchecked by default — professor opts in manually
 const FACTORS_OPT_IN = new Set([
+  'Citation and Referencing',
   'Professionalism and Ethical Considerations',
   'Peer and Team Evaluation'
 ]);
