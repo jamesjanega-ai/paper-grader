@@ -675,7 +675,11 @@ async function saveToSheets(data) {
       run2:            roundPcts?.[1]  !== undefined ? roundPcts[1].toFixed(1) + '%' : '',
       run3:            roundPcts?.[2]  !== undefined ? roundPcts[2].toFixed(1) + '%' : '',
       spread:          spread          !== undefined ? parseFloat(spread).toFixed(1) + '%' : '',
-      consistency
+      consistency,
+      // Narrative summary fields — AA, AB, AC
+      superpower:      narrativeSummary?.superpower    || '',
+      digDeeper:       narrativeSummary?.improvements  || '',
+      nextTime:        narrativeSummary?.watchFor       || ''
     };
 
     const response = await fetch(process.env.GOOGLE_SCRIPT_URL, {
