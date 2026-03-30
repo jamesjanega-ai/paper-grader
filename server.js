@@ -465,8 +465,8 @@ Use ONLY these exact values.
 ${buildBehavioralAnchors(scores)}
 
 
-=== IMPORTANT: PROSE VS. STRUCTURED WRITING ===
-Flowing analytical essays and papers with section headers are equally valid. Do NOT penalize papers for lacking headers, and do NOT reward them simply for having them. A well-reasoned argument made across connected paragraphs carries equal weight to the same argument under a section header. Search the full paper for evidence — relevant content may be distributed across paragraphs rather than isolated under a heading.
+=== IMPORTANT: FINDING EVIDENCE IN INTEGRATED PROSE ===
+Analytically strong papers sometimes express framework reasoning through integrated argument rather than labeled sections. A sentence that applies DTV logic counts as DTV evidence even without using the exact framework name. If an argument spans a paragraph, quote the single most analytically specific sentence and note it is part of a broader argument. Grade what is actually argued, not how it is organized on the page.
 
 
 === TWO-PASS GRADING ===
